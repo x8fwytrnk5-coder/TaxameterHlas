@@ -6,226 +6,167 @@
 <title>ZiskoMeter</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <style>
-body{
-  margin:0;
-  font-family:system-ui,-apple-system,BlinkMacSystemFont;
-  background:linear-gradient(135deg,#1e3c72,#2a5298);
-  color:#222;
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  background: #0f2027;
+  background: linear-gradient(135deg,#0f2027,#203a43,#2c5364);
+  color: white;
 }
-.container{
-  max-width:720px;
-  margin:20px auto;
-  background:#fff;
-  padding:20px;
-  border-radius:16px;
+
+header {
+  padding: 16px;
+  text-align: center;
+  font-size: 22px;
+  font-weight: bold;
 }
-h1{
-  text-align:center;
-  color:#1e3c72;
+
+.container {
+  padding: 15px;
 }
-label{
-  font-weight:600;
-  margin-top:10px;
-  display:block;
+
+input {
+  width: 100%;
+  padding: 12px;
+  margin-bottom: 8px;
+  border-radius: 8px;
+  border: none;
+  font-size: 16px;
 }
-input{
-  width:100%;
-  padding:12px;
-  margin-top:5px;
-  border-radius:10px;
-  border:1px solid #ccc;
-  font-size:16px;
+
+button {
+  padding: 14px;
+  font-size: 16px;
+  border-radius: 10px;
+  border: none;
+  cursor: pointer;
 }
-.row{
-  display:flex;
-  gap:8px;
+
+.btn {
+  width: 100%;
+  margin-bottom: 8px;
+  background: #ffcc00;
+  color: #000;
+  font-weight: bold;
 }
-button{
-  padding:12px;
-  border:none;
-  border-radius:10px;
-  background:#1e88e5;
-  color:#fff;
-  font-weight:600;
-  font-size:15px;
+
+.btn-row {
+  display: flex;
+  gap: 8px;
 }
-button.secondary{
-  background:#555;
+
+.btn-row button {
+  flex: 1;
 }
-button.warn{
-  background:#c62828;
+
+#map {
+  height: 300px;
+  margin-top: 10px;
+  border-radius: 10px;
 }
-button.good{
-  background:#2e7d32;
-}
-#map{
-  height:360px;
-  margin-top:15px;
-  border-radius:14px;
-}
-.result{
-  margin-top:12px;
-  padding:12px;
-  border-radius:12px;
-  background:#f5f7fa;
-  font-size:15px;
+
+.result {
+  margin-top: 10px;
+  font-size: 18px;
+  font-weight: bold;
 }
 </style>
 </head>
 
 <body>
 
+<header>🚖 ZiskoMeter</header>
+
 <div class="container">
-<h1>ZiskoMeter</h1>
 
-<label>Poloha vozidla</label>
-<input id="carPos" readonly placeholder="Načítavam GPS…">
+<button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
 
-<label>Miesto nástupu</label>
-<div class="row">
-  <input id="pickup" placeholder="Zadaj alebo diktuj adresu">
-  <button onclick="dictate('pickup')">🎤</button>
+<input id="pickup" placeholder="Miesto nástupu klienta">
+<input id="dropoff" placeholder="Cieľ klienta">
+
+<button class="btn" onclick="calculate()">📐 Vypočítať trasu</button>
+
+<div class="btn-row">
+  <button onclick="navToClient()">🚗 Začať jazdu</button>
+  <button onclick="navClientRoute()">👤 Klient</button>
 </div>
 
-<label>Cieľ klienta</label>
-<div class="row">
-  <input id="dropoff" placeholder="Zadaj alebo diktuj adresu">
-  <button onclick="dictate('dropoff')">🎤</button>
-</div>
-
-<label>Cena z cenníka (€)</label>
-<input id="price" type="number">
-
-<button onclick="calculate()">Vypočítať</button>
-
-<div class="row" style="margin-top:10px;">
-  <button class="good" onclick="startRide()">Začať jazdu</button>
-  <button class="warn" onclick="endRide()">Ukončiť jazdu</button>
-  <button class="secondary" onclick="openNav()">Navigácia</button>
-</div>
+<div class="result" id="output"></div>
 
 <div id="map"></div>
-<div id="result" class="result">—</div>
+
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-/* ================== MAPA ================== */
-let map=L.map('map').setView([48.15,17.11],13);
+let map, carMarker, pickupMarker, dropMarker;
+let carLat, carLon, pickupLat, pickupLon, dropLat, dropLon;
+
+map = L.map('map').setView([48.15,17.11], 13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-let carMarker=null;
-let pickupMarker=null;
-let dropMarker=null;
-let carLocation=null;
-
-/* ================== GPS ================== */
-navigator.geolocation.getCurrentPosition(async pos=>{
-  carLocation={lat:pos.coords.latitude,lon:pos.coords.longitude};
-  const addr=await reverse(carLocation.lat,carLocation.lon);
-  document.getElementById("carPos").value=addr;
-  carMarker=L.marker([carLocation.lat,carLocation.lon]).addTo(map).bindPopup("Vozidlo");
-  map.setView([carLocation.lat,carLocation.lon],14);
-});
-
-/* ================== GEOKÓDOVANIE ================== */
-async function geocode(q){
-  const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(q)}`);
-  const d=await r.json();
-  if(!d.length) return null;
-  return {lat:+d[0].lat,lon:+d[0].lon};
-}
-
-async function reverse(lat,lon){
-  const r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-  const d=await r.json();
-  return d.display_name||`${lat},${lon}`;
-}
-
-/* ================== VÝPOČET ================== */
-async function distance(a,b){
-  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`);
-  const d=await r.json();
-  return d.routes[0].distance/1000;
-}
-
-async function calculate(){
-  const p=document.getElementById("pickup").value;
-  const d=document.getElementById("dropoff").value;
-  const price=parseFloat(document.getElementById("price").value);
-
-  if(!p||!d||isNaN(price)){ alert("Vyplň všetky údaje"); return; }
-  if(!carLocation){ alert("GPS nie je dostupné"); return; }
-
-  const pick=await geocode(p);
-  const drop=await geocode(d);
-  if(!pick||!drop){ alert("Adresa nebola nájdená"); return; }
-
-  // 🔑 ULOŽENIE SÚRADNÍC (kritické!)
-  pickup.dataset.lat=pick.lat;
-  pickup.dataset.lon=pick.lon;
-  dropoff.dataset.lat=drop.lat;
-  dropoff.dataset.lon=drop.lon;
-
-  if(pickupMarker) map.removeLayer(pickupMarker);
-  if(dropMarker) map.removeLayer(dropMarker);
-
-  pickupMarker=L.marker([pick.lat,pick.lon]).addTo(map).bindPopup("Nástup");
-  dropMarker=L.marker([drop.lat,drop.lon]).addTo(map).bindPopup("Cieľ");
-
-  const d1=await distance(carLocation,pick);
-  const d2=await distance(pick,drop);
-
-  const costs=d1*0.31+d2*0.85;
-  const recommended=costs*1.2;
-  const diff=price-costs;
-
-  document.getElementById("result").innerHTML=
-    `Cena: ${price.toFixed(2)} €<br>
-     Náklady: ${costs.toFixed(2)} €<br>
-     Doporučená cena: ${recommended.toFixed(2)} €<br>
-     Výsledok: <b style="color:${diff>=0?'green':'red'}">${diff.toFixed(2)} €</b>`;
-}
-
-/* ================== NAVIGÁCIA ================== */
-function openNav(){
-  const lat=dropoff.dataset.lat;
-  const lon=dropoff.dataset.lon;
-  if(!lat||!lon){ alert("Najprv vypočítaj trasu"); return; }
-  window.open(`https://maps.apple.com/?daddr=${lat},${lon}&dirflg=d`);
-}
-
-/* ================== HLAS ================== */
-function dictate(id){
-  if(!('webkitSpeechRecognition'in window)){
-    alert("Hlasové zadávanie nie je podporované");
-    return;
-  }
-  const r=new webkitSpeechRecognition();
-  r.lang='sk-SK';
-  r.onresult=e=>{
-    document.getElementById(id).value=e.results[0][0].transcript;
-  };
-  r.start();
-}
-
-/* ================== JAZDA ================== */
-let watchId=null;
-function startRide(){
-  if(!carLocation){ alert("GPS nie je dostupné"); return; }
-  watchId=navigator.geolocation.watchPosition(p=>{
-    carLocation={lat:p.coords.latitude,lon:p.coords.longitude};
+// GPS vozidla
+function getGPS(){
+  navigator.geolocation.getCurrentPosition(pos=>{
+    carLat = pos.coords.latitude;
+    carLon = pos.coords.longitude;
     if(carMarker) map.removeLayer(carMarker);
-    carMarker=L.marker([carLocation.lat,carLocation.lon]).addTo(map);
-    map.setView([carLocation.lat,carLocation.lon]);
-  },null,{enableHighAccuracy:true});
+    carMarker = L.marker([carLat,carLon]).addTo(map).bindPopup("Vozidlo").openPopup();
+    map.setView([carLat,carLon],14);
+  },()=>alert("GPS sa nepodarilo načítať"));
 }
-function endRide(){
-  if(watchId){ navigator.geolocation.clearWatch(watchId); watchId=null; }
-  alert("Jazda ukončená");
+
+// geokódovanie
+async function geocode(addr){
+  const r = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`);
+  const d = await r.json();
+  if(!d[0]) throw "Adresa nenájdená";
+  return {lat:+d[0].lat, lon:+d[0].lon};
+}
+
+// výpočet
+async function calculate(){
+  try{
+    const p = await geocode(pickup.value);
+    const d = await geocode(dropoff.value);
+
+    pickupLat=p.lat; pickupLon=p.lon;
+    dropLat=d.lat; dropLon=d.lon;
+
+    if(pickupMarker) map.removeLayer(pickupMarker);
+    if(dropMarker) map.removeLayer(dropMarker);
+
+    pickupMarker = L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup");
+    dropMarker = L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ");
+
+    map.fitBounds([[pickupLat,pickupLon],[dropLat,dropLon]]);
+
+    output.innerHTML = "Trasa pripravená ✔️";
+
+  }catch(e){
+    alert("Chyba výpočtu trasy");
+  }
+}
+
+// 🚗 vozidlo → nástup
+function navToClient(){
+  if(!pickupLat) return alert("Chýba miesto nástupu");
+  window.open(
+    `https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLon}&travelmode=driving`
+  );
+}
+
+// 👤 nástup → cieľ
+function navClientRoute(){
+  if(!pickupLat || !dropLat) return alert("Trasa nie je kompletná");
+  window.open(
+    `https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}&travelmode=driving`
+  );
 }
 </script>
+
 </body>
 </html>
