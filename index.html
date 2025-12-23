@@ -24,10 +24,26 @@ header{
 input{
   width:100%;
   padding:12px;
-  margin-bottom:8px;
+  margin-bottom:4px;
   border-radius:8px;
   border:none;
   font-size:16px;
+}
+.suggestions{
+  background:white;
+  color:black;
+  border-radius:8px;
+  margin-bottom:8px;
+  max-height:160px;
+  overflow-y:auto;
+}
+.suggestions div{
+  padding:10px;
+  border-bottom:1px solid #ddd;
+}
+.suggestions div:hover{
+  background:#eee;
+  cursor:pointer;
 }
 button{
   padding:14px;
@@ -69,8 +85,11 @@ button{
 
 <button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
 
-<input id="pickup" placeholder="Miesto nástupu klienta">
-<input id="dropoff" placeholder="Cieľ klienta">
+<input id="pickup" placeholder="Miesto nástupu klienta" autocomplete="off">
+<div id="pickupSug" class="suggestions"></div>
+
+<input id="dropoff" placeholder="Cieľ klienta" autocomplete="off">
+<div id="dropoffSug" class="suggestions"></div>
 
 <button class="btn" onclick="calculate()">📐 Vypočítať trasu</button>
 
@@ -91,61 +110,79 @@ button{
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-/* ===== KONŠTANTY ===== */
-const RATE_TO_CLIENT = 0.31;   // €/km
-const RATE_WITH_CLIENT = 0.85; // €/km
+/* ==== KONŠTANTY ==== */
+const RATE_TO_CLIENT = 0.31;
+const RATE_WITH_CLIENT = 0.85;
 const RECOMMENDED_MARGIN = 0.20;
 
-/* ===== PREMENNÉ ===== */
+/* ==== PREMENNÉ ==== */
 let map, carMarker, pickupMarker, dropMarker;
 let carLat, carLon, pickupLat, pickupLon, dropLat, dropLon;
-let distToClient = 0;
-let distWithClient = 0;
+let distToClient=0, distWithClient=0;
 
-/* ===== MAPA ===== */
-map = L.map('map').setView([48.15,17.11],13);
+/* ==== MAPA ==== */
+map=L.map('map').setView([48.15,17.11],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-/* ===== GPS ===== */
+/* ==== GPS ==== */
 function getGPS(){
   navigator.geolocation.getCurrentPosition(pos=>{
-    carLat = pos.coords.latitude;
-    carLon = pos.coords.longitude;
+    carLat=pos.coords.latitude;
+    carLon=pos.coords.longitude;
     if(carMarker) map.removeLayer(carMarker);
-    carMarker = L.marker([carLat,carLon]).addTo(map).bindPopup("Vozidlo").openPopup();
+    carMarker=L.marker([carLat,carLon]).addTo(map).bindPopup("Vozidlo").openPopup();
     map.setView([carLat,carLon],14);
   },()=>alert("GPS sa nepodarilo načítať"));
 }
 
-/* ===== GEOKÓDOVANIE ===== */
+/* ==== AUTOCOMPLETE ==== */
+async function suggest(input,box){
+  if(input.value.length<3){ box.innerHTML=""; return; }
+  let url=`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(input.value)}`;
+  if(carLat){
+    url+=`&lat=${carLat}&lon=${carLon}`;
+  }
+  const r=await fetch(url);
+  const d=await r.json();
+  box.innerHTML="";
+  d.forEach(p=>{
+    const div=document.createElement("div");
+    div.textContent=p.display_name;
+    div.onclick=()=>{
+      input.value=p.display_name;
+      box.innerHTML="";
+    };
+    box.appendChild(div);
+  });
+}
+
+pickup.oninput=()=>suggest(pickup,pickupSug);
+dropoff.oninput=()=>suggest(dropoff,dropoffSug);
+
+/* ==== GEOKÓD ==== */
 async function geocode(addr){
-  const r = await fetch(
-    `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`
-  );
-  const d = await r.json();
+  const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`);
+  const d=await r.json();
   if(!d[0]) throw "Adresa nenájdená";
-  return {lat:+d[0].lat, lon:+d[0].lon};
+  return {lat:+d[0].lat,lon:+d[0].lon};
 }
 
-/* ===== VZDIALENOSŤ ===== */
-function km(lat1,lon1,lat2,lon2){
+/* ==== VZDIALENOSŤ ==== */
+function km(a,b,c,d){
   const R=6371;
-  const dLat=(lat2-lat1)*Math.PI/180;
-  const dLon=(lon2-lon1)*Math.PI/180;
-  const a=Math.sin(dLat/2)**2+
-          Math.cos(lat1*Math.PI/180)*
-          Math.cos(lat2*Math.PI/180)*
-          Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  const dLat=(c-a)*Math.PI/180;
+  const dLon=(d-b)*Math.PI/180;
+  const x=Math.sin(dLat/2)**2+
+    Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
+  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
-/* ===== VÝPOČET ===== */
+/* ==== VÝPOČET ==== */
 async function calculate(){
   try{
     if(!carLat) return alert("Najprv urč polohu vozidla");
-
-    const p = await geocode(pickup.value);
-    const d = await geocode(dropoff.value);
+    const p=await geocode(pickup.value);
+    const d=await geocode(dropoff.value);
 
     pickupLat=p.lat; pickupLon=p.lon;
     dropLat=d.lat; dropLon=d.lon;
@@ -158,55 +195,40 @@ async function calculate(){
 
     map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
 
-    distToClient = km(carLat,carLon,pickupLat,pickupLon);
-    distWithClient = km(pickupLat,pickupLon,dropLat,dropLon);
+    distToClient=km(carLat,carLon,pickupLat,pickupLon);
+    distWithClient=km(pickupLat,pickupLon,dropLat,dropLon);
 
     updateResults();
-
   }catch(e){
-    alert("Chyba pri výpočte trasy");
+    alert("Chyba výpočtu");
   }
 }
 
-/* ===== VÝSLEDKY ===== */
+/* ==== VÝSLEDKY ==== */
 function updateResults(){
-  const price = parseFloat(priceInput.value)||0;
+  const price=parseFloat(priceInput.value)||0;
+  const cost=distToClient*RATE_TO_CLIENT+distWithClient*RATE_WITH_CLIENT;
+  const recommended=cost*(1+RECOMMENDED_MARGIN);
+  const diff=price-cost;
 
-  const cost =
-    distToClient*RATE_TO_CLIENT +
-    distWithClient*RATE_WITH_CLIENT;
-
-  const recommended = cost*(1+RECOMMENDED_MARGIN);
-  const diff = price - cost;
-
-  results.innerHTML = `
-    <p>🚗 Km po klienta: ${distToClient.toFixed(2)} km</p>
-    <p>👤 Km s klientom: ${distWithClient.toFixed(2)} km</p>
+  results.innerHTML=`
+    <p>🚗 Km po klienta: ${distToClient.toFixed(2)}</p>
+    <p>👤 Km s klientom: ${distWithClient.toFixed(2)}</p>
     <p>💰 Náklady: ${cost.toFixed(2)} €</p>
     <p>📊 Doporučená cena: ${recommended.toFixed(2)} €</p>
-    <p class="${diff>=0?'green':'red'}">
-      ${diff>=0?'Zisk':'Strata'}: ${diff.toFixed(2)} €
-    </p>
+    <p class="${diff>=0?'green':'red'}">${diff>=0?'Zisk':'Strata'}: ${diff.toFixed(2)} €</p>
   `;
 }
+priceInput.oninput=updateResults;
 
-priceInput.addEventListener("input",updateResults);
-
-/* ===== NAVIGÁCIA ===== */
-// vozidlo → nástup
+/* ==== NAVIGÁCIA ==== */
 function navToClient(){
-  if(!pickupLat) return alert("Chýba miesto nástupu");
-  window.open(
-    `https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLon}&travelmode=driving`
-  );
+  if(!pickupLat) return alert("Chýba nástup");
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLon}`);
 }
-
-// nástup → cieľ
 function navClientRoute(){
-  if(!pickupLat||!dropLat) return alert("Trasa nie je kompletná");
-  window.open(
-    `https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}&travelmode=driving`
-  );
+  if(!pickupLat||!dropLat) return alert("Chýba trasa");
+  window.open(`https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}`);
 }
 </script>
 
