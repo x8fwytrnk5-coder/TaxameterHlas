@@ -1,190 +1,10 @@
-<!DOCTYPE html>
-<html lang="sk">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ZiskoMeter</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>
-body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);color:white;}
-header{padding:16px;text-align:center;font-size:22px;font-weight:700;}
-.container{padding:15px;}
-input{width:100%;padding:12px;margin-bottom:4px;border-radius:8px;border:none;font-size:16px;}
-.suggestions{background:white;color:black;border-radius:8px;margin-bottom:8px;max-height:160px;overflow-y:auto;}
-.suggestions div{padding:10px;border-bottom:1px solid #ddd;}
-.suggestions div:hover{background:#eee;cursor:pointer;}
-button{padding:14px;font-size:16px;border-radius:10px;border:none;cursor:pointer;}
-.btn{width:100%;background:#ffcc00;color:black;font-weight:700;margin-bottom:8px;}
-.btn-row{display:flex;gap:8px;}
-.btn-row button{flex:1;}
-#map{height:300px;margin-top:10px;border-radius:10px;}
-.box{background:rgba(0,0,0,0.35);padding:12px;border-radius:10px;margin-top:10px;}
-.green{color:#4cff4c;}
-.red{color:#ff5c5c;}
-canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height:200px;}
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;}
-.modal-content{background:#fff;color:#000;padding:20px;border-radius:10px;width:80%;max-width:300px;text-align:center;}
-.modal-content input{width:80%;margin:8px 0;}
-</style>
-</head>
-<body>
-<header>🚖 ZiskoMeter</header>
-<div class="container">
-
-<button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
-
-<input id="pickup" placeholder="Miesto nástupu klienta" autocomplete="off">
-<div id="pickupSug" class="suggestions"></div>
-
-<input id="dropoff" placeholder="Cieľ klienta" autocomplete="off">
-<div id="dropoffSug" class="suggestions"></div>
-
-<input id="priceInput" type="number" placeholder="Cena z cenníka (€)">
-<button class="btn" onclick="calculate()">📐 Vypočítať trasu</button>
-
-<div class="btn-row">
-  <button onclick="startRide()">🚗 Začať jazdu</button>
-  <button onclick="endRide()">🛑 Ukončiť jazdu</button>
-  <button onclick="navClientRoute()">👤 Klient</button>
-</div>
-
-<div class="box">
-  <div id="results"></div>
-</div>
-
-<div class="box">
-  <button class="btn" onclick="showStats()">📊 Štatistiky dňa</button>
-  <button class="btn" onclick="clearStats()">❌ Zmazať štatistiku</button>
-  <canvas id="chart"></canvas>
-</div>
-
-<div class="box">
-  <button class="btn" onclick="showPinModal()">⚙️ Nastavenie sadzieb</button>
-</div>
-
-<div id="map"></div>
-
-<div id="pinModal" class="modal">
-  <div class="modal-content">
-    <p>Zadaj PIN pre úpravu sadzieb</p>
-    <input type="password" id="pinInput" placeholder="PIN">
-    <button onclick="checkPin()">Potvrdiť</button>
-  </div>
-</div>
-
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script>
-const RATE_TO_CLIENT=0.31;
-const RATE_WITH_CLIENT=0.85;
-const RECOMMENDED_MARGIN=0.20;
-let APP_PIN="0000";
-let SADZBY_PIN="123456";
-
-let map, carMarker, pickupMarker, dropMarker;
-let carLat, carLon, pickupLat, pickupLon, dropLat, dropLon;
-let distToClient=0, distWithClient=0;
-let currentRide=null;
-
-map=L.map('map').setView([48.15,17.11],13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
-
-window.onload = () => { checkAppPin(); } 
-function checkAppPin(){
-  const pin = prompt("Zadaj PIN pre vstup do aplikácie:");
-  if(pin!==APP_PIN){
-    alert("Nesprávny PIN. Aplikácia sa zatvára.");
-    document.body.innerHTML="<h2 style='text-align:center;color:red'>Prístup zamietnutý</h2>";
-  }
-}
-
-function getGPS(){
-  navigator.geolocation.getCurrentPosition(pos=>{
-    carLat=pos.coords.latitude;
-    carLon=pos.coords.longitude;
-    if(carMarker) map.removeLayer(carMarker);
-    carMarker=L.marker([carLat,carLon]).addTo(map).bindPopup("Vozidlo").openPopup();
-    map.setView([carLat,carLon],14);
-  },()=>alert("GPS sa nepodarilo načítať"));
-}
-
-async function suggest(input,box){
-  if(input.value.length<3){ box.innerHTML=""; return; }
-  let url=`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(input.value)}`;
-  if(carLat) url+=`&lat=${carLat}&lon=${carLon}&bounded=1`;
-  const r=await fetch(url);
-  const d=await r.json();
-  box.innerHTML="";
-  d.forEach(p=>{
-    const div=document.createElement("div");
-    div.textContent=p.display_name;
-    div.onclick=()=>{
-      input.value=p.display_name;
-      box.innerHTML="";
-    };
-    box.appendChild(div);
-  });
-}
-pickup.oninput=()=>suggest(pickup,pickupSug);
-dropoff.oninput=()=>suggest(dropoff,dropoffSug);
-
-async function geocode(addr){
-  const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`);
-  const d=await r.json();
-  if(!d[0]) throw "Adresa nenájdená";
-  return {lat:+d[0].lat,lon:+d[0].lon};
-}
-
-function km(a,b,c,d){
-  const R=6371;
-  const dLat=(c-a)*Math.PI/180;
-  const dLon=(d-b)*Math.PI/180;
-  const x=Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
-  return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
-}
-
-async function calculate(){
-  try{
-    if(!carLat) return alert("Najprv urč polohu vozidla");
-    const p=await geocode(pickup.value);
-    const d=await geocode(dropoff.value);
-    pickupLat=p.lat; pickupLon=p.lon;
-    dropLat=d.lat; dropLon=d.lon;
-    if(pickupMarker) map.removeLayer(pickupMarker);
-    if(dropMarker) map.removeLayer(dropMarker);
-    pickupMarker=L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup").openPopup();
-    dropMarker=L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ").openPopup();
-    map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
-    distToClient=km(carLat,carLon,pickupLat,pickupLon)||0;
-    distWithClient=km(pickupLat,pickupLon,dropLat,dropLon)||0;
-    updateResults();
-  }catch(e){console.error(e); alert("Chyba výpočtu. Skontroluj adresy alebo GPS polohu.");}
-}
-
-function updateResults(){
-  const price=parseFloat(priceInput.value)||0;
-  const cost=(distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT)||0;
-  const recommended=cost*(1+RECOMMENDED_MARGIN);
-  const diff=price-cost;
-  results.innerHTML=`
-    <p>🚗 Km po klienta: ${distToClient.toFixed(2)}</p>
-    <p>👤 Km s klientom: ${distWithClient.toFixed(2)}</p>
-    <p>💰 Náklady: ${cost.toFixed(2)} €</p>
-    <p>📊 Doporučená cena: ${recommended.toFixed(2)} €</p>
-    <p class="${diff>=0?'green':'red'}">${diff>=0?'Zisk':'Strata'}: ${diff.toFixed(2)} €</p>
-  `;
-}
-priceInput.oninput=updateResults;
-
-function startRide(){
-  if(!carLat||!pickupLat||!dropLat) return alert("Chýba GPS alebo adresy");
-  currentRide={startTime:new Date(),kmTo:distToClient,kmWith:distWithClient,cost:distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT,price:parseFloat(priceInput.value)||0};
-  alert("Jazda začala");
-}
-
 function endRide(){
   if(!currentRide) return alert("Jazda nebola začatá");
   currentRide.endTime=new Date();
   currentRide.diff=currentRide.price-currentRide.cost;
+  // Výpočet trvania jazdy v minútach
+  currentRide.duration=((currentRide.endTime-currentRide.startTime)/60000).toFixed(2);
+  
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   rides.push(currentRide);
   localStorage.setItem("rides",JSON.stringify(rides));
@@ -192,49 +12,28 @@ function endRide(){
   alert("Jazda ukončená a uložená");
 }
 
-function navToClient(){ if(!pickupLat) return alert("Chýba nástup"); window.open(`https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLon}`);}
-function navClientRoute(){ if(!pickupLat||!dropLat) return alert("Chýba trasa"); window.open(`https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}`);}
-
 function showStats(){
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   if(!rides.length){ alert("Žiadne jazdy"); return; }
-  let totalKmTo=0,totalKmWith=0,totalCost=0,totalPrice=0,totalDiff=0;
+  let totalKmTo=0,totalKmWith=0,totalCost=0,totalPrice=0,totalDiff=0,totalTime=0;
   rides.forEach(r=>{
     totalKmTo+=Number(r.kmTo)||0;
     totalKmWith+=Number(r.kmWith)||0;
     totalCost+=Number(r.cost)||0;
     totalPrice+=Number(r.price)||0;
     totalDiff+=Number(r.diff)||0;
+    totalTime+=Number(r.duration)||0; // minúty
   });
+  let totalKm=totalKmTo+totalKmWith;
+  let realValuePerKm=totalKmWith? (totalPrice/totalKmWith).toFixed(2):0;
+
   alert(`Počet jázd: ${rides.length}
 Km po klienta: ${totalKmTo.toFixed(2)}
 Km s klientom: ${totalKmWith.toFixed(2)}
+Celkové km: ${totalKm.toFixed(2)}
 Náklady: ${totalCost.toFixed(2)} €
 Cena z cenníka: ${totalPrice.toFixed(2)} €
-Celkový zisk/strata: ${totalDiff.toFixed(2)} €`);
-
-  const ctx=document.getElementById("chart").getContext("2d");
-  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-  const max=Math.max(totalKmTo,totalKmWith,1);
-  ctx.fillStyle="#ffcc00"; ctx.fillRect(10,ctx.canvas.height-(totalKmTo/max*150)-10,50,totalKmTo/max*150);
-  ctx.fillStyle="#4cff4c"; ctx.fillRect(100,ctx.canvas.height-(totalKmWith/max*150)-10,50,totalKmWith/max*150);
+Celkový zisk/strata: ${totalDiff.toFixed(2)} €
+Celkový čas jazdy: ${totalTime.toFixed(2)} min
+Reálna hodnota 1 km: ${realValuePerKm} €/km`);
 }
-
-function clearStats(){
-  if(confirm("Naozaj zmazať všetky uložené jazdy?")){
-    localStorage.removeItem("rides");
-    alert("Štatistika vymazaná");
-    const ctx=document.getElementById("chart").getContext("2d");
-    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-  }
-}
-
-function showPinModal(){ document.getElementById("pinModal").style.display="flex"; }
-function checkPin(){
-  const val=document.getElementById("pinInput").value;
-  if(val===SADZBY_PIN){ alert("PIN správny – tu sa dajú meniť sadzby"); document.getElementById("pinModal").style.display="none"; document.getElementById("pinInput").value=""; }
-  else alert("PIN nesprávny");
-}
-</script>
-</body>
-</html>
