@@ -3,204 +3,118 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Taxi – kalkulačka & taxameter</title>
+
+<!--
+Taxi Kalkulačka / Taxameter
+Autor myšlienky a realizácie: Peter Lukáč
+Rok: 2025
+
+Tento softvér je chránený autorským právom.
+Akékoľvek kopírovanie, šírenie alebo úpravy bez výslovného súhlasu autora sú zakázané.
+-->
+
+<title>Taxi Kalkulačka</title>
 
 <style>
-body {
-  font-family:-apple-system,BlinkMacSystemFont,sans-serif;
-  background:#f2f2f2;
+body{
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  background:#f4f6f8;
   margin:0;
-  padding:12px;
+  padding:20px;
 }
-h1{text-align:center;}
-.card{
+
+.container{
+  max-width:600px;
+  margin:auto;
   background:#fff;
-  padding:14px;
-  border-radius:12px;
-  margin-bottom:12px;
-}
-label{
-  font-weight:600;
-  display:block;
-  margin-top:10px;
-}
-.row{
-  display:flex;
-  gap:8px;
-}
-input{
-  flex:1;
-  padding:12px;
-  font-size:16px;
-}
-button{
-  padding:12px;
-  font-size:16px;
-  background:#007aff;
-  color:#fff;
-  border:none;
+  padding:20px;
   border-radius:10px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.1);
 }
-button.mic{
-  background:#ff9500;
-  width:54px;
+
+h1{
+  text-align:center;
 }
-button.secondary{background:#34c759;width:100%;}
-.result{font-size:18px;font-weight:bold;}
-.green{color:#0a7d00;}
-.red{color:#c10000;}
-iframe{
+
+label{
+  display:block;
+  margin-top:15px;
+  font-weight:600;
+}
+
+input, button{
   width:100%;
-  height:260px;
+  padding:10px;
+  margin-top:5px;
+  font-size:16px;
+}
+
+button{
+  background:#007aff;
+  color:white;
   border:none;
-  border-radius:12px;
+  border-radius:6px;
+}
+
+button:active{
+  opacity:0.8;
+}
+
+.result{
+  margin-top:20px;
+  padding:15px;
+  background:#eef2f5;
+  border-radius:6px;
+  font-size:16px;
+}
+
+footer{
+  margin-top:30px;
+  text-align:center;
+  font-size:13px;
+  color:#666;
 }
 </style>
 </head>
 
 <body>
 
-<h1>🚕 Taxi kalkulačka</h1>
+<div class="container">
+  <h1>🚕 Taxi Kalkulačka</h1>
 
-<div class="card">
-  <label>Poloha vozidla (GPS alebo ručne)</label>
-  <input id="vehLat" placeholder="Latitude" type="number" step="any">
-  <input id="vehLon" placeholder="Longitude" type="number" step="any">
-  <button onclick="loadGPS()">📍 Načítať GPS</button>
+  <label>Cena jazdy podľa cenníka (€)</label>
+  <input type="number" id="price" placeholder="Zadaj cenu">
 
-  <label>Miesto nástupu klienta</label>
-  <div class="row">
-    <input id="startAddr" placeholder="Ulica, mesto">
-    <button class="mic" onclick="dictate('startAddr')">🎙️</button>
-  </div>
+  <label>Náklady na jazdu (€)</label>
+  <input type="number" id="costs" placeholder="Zadaj náklady">
 
-  <label>Cieľ klienta</label>
-  <div class="row">
-    <input id="endAddr" placeholder="Ulica, mesto">
-    <button class="mic" onclick="dictate('endAddr')">🎙️</button>
-  </div>
+  <button onclick="calculate()">Vypočítať rozdiel</button>
 
-  <label>Cena z cenníka (€)</label>
-  <input id="priceInput">
+  <div class="result" id="result">Výsledok sa zobrazí tu</div>
 
-  <label>Batožina (ks × 2 €)</label>
-  <input id="bags" type="number" min="0" value="0">
-
-  <label>Ďalšie príplatky (€)</label>
-  <input id="extras" type="number" min="0" value="0">
-
-  <button class="secondary" onclick="calculate()">Vypočítať</button>
+  <footer>
+    © 2025 – Autor: <strong>Peter Lukáč</strong><br>
+    Použitie len so súhlasom autora
+  </footer>
 </div>
 
-<iframe id="map" src="https://www.openstreetmap.org/export/embed.html?layer=mapnik"></iframe>
-
-<div class="card result" id="result">Pripravené</div>
-
 <script>
-/* ===== KONŠTANTY ===== */
-const COST_RATE=0.31;
-const BAG_RATE=2;
-const GEO_CACHE_TTL=24*60*60*1000;
+function calculate(){
+  const price = parseFloat(document.getElementById("price").value);
+  const costs = parseFloat(document.getElementById("costs").value);
+  const result = document.getElementById("result");
 
-/* ===== CACHE ===== */
-const geoCache={};
-
-/* ===== GPS ===== */
-function loadGPS(){
-  navigator.geolocation.getCurrentPosition(
-    pos=>{
-      vehLat.value=pos.coords.latitude;
-      vehLon.value=pos.coords.longitude;
-      result.textContent="GPS načítané";
-      updateMap(pos.coords.latitude,pos.coords.longitude);
-    },
-    ()=>result.textContent="GPS zlyhalo",
-    {enableHighAccuracy:true,timeout:15000}
-  );
-}
-
-/* ===== DIKTOVANIE ===== */
-function dictate(targetId){
-  if(!('webkitSpeechRecognition' in window)){
-    alert("Diktovanie nie je podporované");
+  if(isNaN(price) || isNaN(costs)){
+    result.textContent = "Zadaj cenu aj náklady";
     return;
   }
-  const rec=new webkitSpeechRecognition();
-  rec.lang="sk-SK";
-  rec.interimResults=false;
-  rec.maxAlternatives=1;
 
-  rec.onresult=e=>{
-    document.getElementById(targetId).value=e.results[0][0].transcript;
-  };
-  rec.onerror=()=>alert("Diktovanie zlyhalo");
-  rec.start();
-}
+  const diff = price - costs;
 
-/* ===== GEOCODING ===== */
-async function geocodeAddress(addr,retries=2){
-  if(!addr||addr.length<3) throw "Neplatná adresa";
-  const now=Date.now();
-  if(geoCache[addr]&&(now-geoCache[addr].time)<GEO_CACHE_TTL)
-    return geoCache[addr].coords;
-
-  const c=new AbortController();
-  const t=setTimeout(()=>c.abort(),10000);
-  try{
-    const r=await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&limit=1&q=${encodeURIComponent(addr)}`,
-      {signal:c.signal,headers:{'User-Agent':'TaxiApp/1.0'}}
-    );
-    const j=await r.json();
-    if(!j.length) throw "Adresa nenájdená";
-    const coords={lat:+j[0].lat,lon:+j[0].lon};
-    geoCache[addr]={coords,time:now};
-    return coords;
-  }catch(e){
-    if(retries>0){await new Promise(r=>setTimeout(r,800));return geocodeAddress(addr,retries-1);}
-    throw e;
-  }finally{clearTimeout(t);}
-}
-
-/* ===== TRASA ===== */
-async function routeKm(aLat,aLon,bLat,bLon){
-  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${aLon},${aLat};${bLon},${bLat}?overview=false`);
-  const j=await r.json();
-  if(!j.routes||!j.routes.length) throw "Trasa nenájdená";
-  return j.routes[0].distance/1000;
-}
-
-/* ===== MAPA ===== */
-function updateMap(lat,lon){
-  map.src=`https://www.openstreetmap.org/export/embed.html?bbox=${lon-0.02},${lat-0.02},${lon+0.02},${lat+0.02}&layer=mapnik&marker=${lat},${lon}`;
-}
-
-/* ===== VÝPOČET ===== */
-async function calculate(){
-  try{
-    result.textContent="Počítam…";
-    const vLat=parseFloat(vehLat.value);
-    const vLon=parseFloat(vehLon.value);
-    const price=parseFloat(priceInput.value);
-    if(isNaN(vLat)||isNaN(vLon)||isNaN(price)) throw "Chýbajú údaje";
-
-    const bagsCount=parseInt(bags.value)||0;
-    const extra=parseFloat(extras.value)||0;
-
-    const start=await geocodeAddress(startAddr.value);
-    const end=await geocodeAddress(endAddr.value);
-
-    const km1=await routeKm(vLat,vLon,start.lat,start.lon);
-    const km2=await routeKm(start.lat,start.lon,end.lat,end.lon);
-
-    const costs=(km1+km2)*COST_RATE + bagsCount*BAG_RATE + extra;
-    const diff=price-costs;
-
-    result.innerHTML=`Náklady: ${costs.toFixed(2)} €<br>Cena: ${price.toFixed(2)} €<br>Výsledok: ${diff.toFixed(2)} €`;
-    result.className="card result "+(diff>=0?"green":"red");
-  }catch(e){
-    result.textContent="Chyba: "+e;
-    result.className="card result red";
+  if(diff >= 0){
+    result.innerHTML = "Zisk: <strong style='color:green'>" + diff.toFixed(2) + " €</strong>";
+  } else {
+    result.innerHTML = "Strata: <strong style='color:red'>" + diff.toFixed(2) + " €</strong>";
   }
 }
 </script>
