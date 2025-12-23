@@ -5,71 +5,59 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <!--
-Taxi Kalkulačka / Taxameter
+Taxi aplikácia – kalkulačka nákladov / taxameter
 Autor myšlienky a realizácie: Peter Lukáč
 Rok: 2025
 
 Tento softvér je chránený autorským právom.
-Akékoľvek kopírovanie, šírenie alebo úpravy bez výslovného súhlasu autora sú zakázané.
+Akékoľvek kopírovanie, šírenie alebo použitie bez súhlasu autora je zakázané.
 -->
 
 <title>Taxi Kalkulačka</title>
 
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+
 <style>
 body{
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+  font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;
   background:#f4f6f8;
   margin:0;
-  padding:20px;
+  padding:15px;
 }
-
 .container{
-  max-width:600px;
+  max-width:700px;
   margin:auto;
   background:#fff;
-  padding:20px;
+  padding:15px;
   border-radius:10px;
-  box-shadow:0 4px 12px rgba(0,0,0,0.1);
 }
-
-h1{
-  text-align:center;
-}
-
-label{
-  display:block;
-  margin-top:15px;
-  font-weight:600;
-}
-
-input, button{
+h1{text-align:center;}
+label{font-weight:600;margin-top:10px;display:block;}
+input,button{
   width:100%;
   padding:10px;
   margin-top:5px;
   font-size:16px;
 }
-
 button{
   background:#007aff;
-  color:white;
+  color:#fff;
   border:none;
   border-radius:6px;
 }
-
-button:active{
-  opacity:0.8;
+#map{
+  height:300px;
+  margin-top:15px;
+  border-radius:8px;
 }
-
 .result{
-  margin-top:20px;
-  padding:15px;
-  background:#eef2f5;
+  margin-top:15px;
+  padding:12px;
   border-radius:6px;
   font-size:16px;
 }
-
 footer{
-  margin-top:30px;
+  margin-top:25px;
   text-align:center;
   font-size:13px;
   color:#666;
@@ -78,46 +66,123 @@ footer{
 </head>
 
 <body>
-
 <div class="container">
-  <h1>🚕 Taxi Kalkulačka</h1>
+<h1>🚕 Taxi Kalkulačka</h1>
 
-  <label>Cena jazdy podľa cenníka (€)</label>
-  <input type="number" id="price" placeholder="Zadaj cenu">
+<label>Poloha vozidla</label>
+<input id="carPos" placeholder="Načítava sa GPS…" readonly>
 
-  <label>Náklady na jazdu (€)</label>
-  <input type="number" id="costs" placeholder="Zadaj náklady">
+<label>Miesto nástupu klienta</label>
+<input id="pickup" placeholder="Zadaj adresu">
 
-  <button onclick="calculate()">Vypočítať rozdiel</button>
+<label>Cieľ klienta</label>
+<input id="dropoff" placeholder="Zadaj adresu">
 
-  <div class="result" id="result">Výsledok sa zobrazí tu</div>
+<label>Cena z cenníka (€)</label>
+<input id="price" type="number" placeholder="Zadá vodič">
 
-  <footer>
-    © 2025 – Autor: <strong>Peter Lukáč</strong><br>
-    Použitie len so súhlasom autora
-  </footer>
+<button onclick="calculate()">Vypočítať</button>
+
+<div id="map"></div>
+<div id="result" class="result">Výsledok sa zobrazí tu</div>
+
+<footer>
+© 2025 – Autor: <strong>Peter Lukáč</strong><br>
+Použitie len so súhlasom autora
+</footer>
 </div>
 
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
 <script>
-function calculate(){
-  const price = parseFloat(document.getElementById("price").value);
-  const costs = parseFloat(document.getElementById("costs").value);
-  const result = document.getElementById("result");
+/*
+Taxi aplikácia
+Autor: Peter Lukáč
+Rok: 2025
+*/
 
-  if(isNaN(price) || isNaN(costs)){
-    result.textContent = "Zadaj cenu aj náklady";
-    return;
-  }
+/* SKRYTÉ SADZBY */
+const COST_PER_KM = 0.31;
+const RIDE_PER_KM = 0.85;
 
-  const diff = price - costs;
+/* MAPA */
+let map = L.map('map').setView([48.1486,17.1077],13);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+  attribution:'© OpenStreetMap'
+}).addTo(map);
 
-  if(diff >= 0){
-    result.innerHTML = "Zisk: <strong style='color:green'>" + diff.toFixed(2) + " €</strong>";
-  } else {
-    result.innerHTML = "Strata: <strong style='color:red'>" + diff.toFixed(2) + " €</strong>";
+let markers=[];
+
+/* GPS */
+navigator.geolocation.getCurrentPosition(pos=>{
+  const lat=pos.coords.latitude;
+  const lon=pos.coords.longitude;
+  document.getElementById("carPos").value=lat.toFixed(5)+", "+lon.toFixed(5);
+  map.setView([lat,lon],14);
+  markers.push(L.marker([lat,lon]).addTo(map).bindPopup("Vozidlo"));
+});
+
+/* GEOKÓDOVANIE */
+async function geocode(addr){
+  const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(addr));
+  const d=await r.json();
+  return d.length?{lat:+d[0].lat,lon:+d[0].lon}:null;
+}
+
+/* VZDIALENOSŤ */
+async function distance(a,b){
+  const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`);
+  const d=await r.json();
+  return d.routes[0].distance/1000;
+}
+
+/* VÝPOČET */
+async function calculate(){
+  const result=document.getElementById("result");
+  result.textContent="Počítam…";
+
+  try{
+    markers.forEach(m=>map.removeLayer(m));
+    markers=[];
+
+    const car=document.getElementById("carPos").value.split(",");
+    const pickupAddr=document.getElementById("pickup").value;
+    const dropAddr=document.getElementById("dropoff").value;
+    const price=parseFloat(document.getElementById("price").value);
+
+    if(!pickupAddr||!dropAddr||isNaN(price)){
+      result.textContent="Vyplň všetky údaje";
+      return;
+    }
+
+    const carLoc={lat:+car[0],lon:+car[1]};
+    const pick=await geocode(pickupAddr);
+    const drop=await geocode(dropAddr);
+
+    if(!pick||!drop){
+      result.textContent="Adresu sa nepodarilo nájsť";
+      return;
+    }
+
+    markers.push(L.marker([pick.lat,pick.lon]).addTo(map).bindPopup("Nástup"));
+    markers.push(L.marker([drop.lat,drop.lon]).addTo(map).bindPopup("Cieľ"));
+
+    const d1=await distance(carLoc,pick);
+    const d2=await distance(pick,drop);
+
+    const costs=(d1+d2)*COST_PER_KM;
+    const ride=d2*RIDE_PER_KM;
+    const diff=price-costs;
+
+    result.innerHTML=
+      `Cena jazdy: ${price.toFixed(2)} €<br>
+       Náklady: ${costs.toFixed(2)} €<br>
+       Výsledok: <strong style="color:${diff>=0?'green':'red'}">
+       ${diff>=0?'Zisk':'Strata'} ${Math.abs(diff).toFixed(2)} €</strong>`;
+  }catch(e){
+    result.textContent="Chyba výpočtu";
   }
 }
 </script>
-
 </body>
 </html>
