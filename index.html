@@ -31,35 +31,38 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 <header>🚖 ZiskoMeter</header>
 <div class="container">
 
-<!-- Vstup PIN pre aplikáciu sa spustí pri načítaní -->
-
+<!-- GPS polohy -->
 <button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
 
+<!-- Adresy -->
 <input id="pickup" placeholder="Miesto nástupu klienta" autocomplete="off">
 <div id="pickupSug" class="suggestions"></div>
 
 <input id="dropoff" placeholder="Cieľ klienta" autocomplete="off">
 <div id="dropoffSug" class="suggestions"></div>
 
-<!-- Cenník pred tlačidlom výpočtu -->
+<!-- Cenník -->
 <input id="priceInput" type="number" placeholder="Cena z cenníka (€)">
 <button class="btn" onclick="calculate()">📐 Vypočítať trasu</button>
 
+<!-- Tlačidlá navigácie -->
 <div class="btn-row">
   <button onclick="navToClient()">🚗 Začať jazdu</button>
   <button onclick="navClientRoute()">👤 Klient</button>
 </div>
 
+<!-- Výsledky -->
 <div class="box">
   <div id="results"></div>
 </div>
 
+<!-- Štatistiky -->
 <div class="box">
   <button class="btn" onclick="showStats()">📊 Štatistiky dňa</button>
   <canvas id="chart"></canvas>
 </div>
 
-<!-- Tlačidlo pre PIN nastavenia sadzieb -->
+<!-- PIN pre úpravu sadzieb -->
 <div class="box">
   <button class="btn" onclick="showPinModal()">⚙️ Nastavenie sadzieb</button>
 </div>
@@ -81,8 +84,8 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 const RATE_TO_CLIENT = 0.31;
 const RATE_WITH_CLIENT = 0.85;
 const RECOMMENDED_MARGIN = 0.20;
-let APP_PIN = "0000";        // PIN vstupu do aplikácie
-let SADZBY_PIN = "123456";   // PIN pre nastavenie sadzieb
+let APP_PIN = "0000";
+let SADZBY_PIN = "123456";
 
 /* ==== PREMENNÉ ==== */
 let map, carMarker, pickupMarker, dropMarker;
@@ -157,26 +160,38 @@ function km(a,b,c,d){
 async function calculate(){
   try{
     if(!carLat) return alert("Najprv urč polohu vozidla");
+
     const p=await geocode(pickup.value);
     const d=await geocode(dropoff.value);
+
     pickupLat=p.lat; pickupLon=p.lon;
     dropLat=d.lat; dropLon=d.lon;
+
     if(pickupMarker) map.removeLayer(pickupMarker);
     if(dropMarker) map.removeLayer(dropMarker);
-    pickupMarker=L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup");
-    dropMarker=L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ");
+
+    pickupMarker=L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup").openPopup();
+    dropMarker=L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ").openPopup();
+
     map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
-    distToClient=km(carLat,carLon,pickupLat,pickupLon)||0;
-    distWithClient=km(pickupLat,pickupLon,dropLat,dropLon)||0;
+
+    // Výpočet vzdialeností
+    distToClient = km(carLat,carLon,pickupLat,pickupLon) || 0;
+    distWithClient = km(pickupLat,pickupLon,dropLat,dropLon) || 0;
+
     updateResults();
     saveRide();
-  }catch(e){alert("Chyba výpočtu");}
+
+  } catch(e){
+    console.error(e);
+    alert("Chyba výpočtu. Skontroluj adresy alebo GPS polohu.");
+  }
 }
 
 /* ==== VÝSLEDKY ==== */
 function updateResults(){
   const price=parseFloat(priceInput.value)||0;
-  const cost=(distToClient*RATE_TO_CLIENT+distWithClient*RATE_WITH_CLIENT)||0;
+  const cost=(distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT)||0;
   const recommended=cost*(1+RECOMMENDED_MARGIN);
   const diff=price-cost;
   results.innerHTML=`
@@ -196,15 +211,15 @@ function navClientRoute(){ if(!pickupLat||!dropLat) return alert("Chýba trasa")
 /* ==== ŠTATISTIKY ==== */
 function saveRide(){
   const price=parseFloat(priceInput.value)||0;
-  const cost=(distToClient*RATE_TO_CLIENT+distWithClient*RATE_WITH_CLIENT)||0;
+  const cost=(distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT)||0;
   const diff=price-cost;
   const ride={
     date:new Date().toLocaleDateString(),
-    kmTo:distToClient||0,
-    kmWith:distWithClient||0,
-    price,
-    cost,
-    diff
+    kmTo:distToClient || 0,
+    kmWith:distWithClient || 0,
+    price: price,
+    cost: cost,
+    diff: diff
   };
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   rides.push(ride);
@@ -214,13 +229,15 @@ function saveRide(){
 function showStats(){
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   if(!rides.length){ alert("Žiadne jazdy"); return; }
-  const totalTo=rides.reduce((a,r)=>a+(r.kmTo||0),0);
-  const totalWith=rides.reduce((a,r)=>a+(r.kmWith||0),0);
-  const totalCost=rides.reduce((a,r)=>a+(r.cost||0),0);
-  const totalPrice=rides.reduce((a,r)=>a+(r.price||0),0);
-  const totalDiff=rides.reduce((a,r)=>a+(r.diff||0),0);
+
+  const totalTo=rides.reduce((a,r)=>a+(parseFloat(r.kmTo)||0),0);
+  const totalWith=rides.reduce((a,r)=>a+(parseFloat(r.kmWith)||0),0);
+  const totalCost=rides.reduce((a,r)=>a+(parseFloat(r.cost)||0),0);
+  const totalPrice=rides.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
+  const totalDiff=rides.reduce((a,r)=>a+(parseFloat(r.diff)||0),0);
+
   alert(`Počet jázd: ${rides.length}\nKm po klienta: ${totalTo.toFixed(2)}\nKm s klientom: ${totalWith.toFixed(2)}\nNáklady: ${totalCost.toFixed(2)} €\nCena z cenníka: ${totalPrice.toFixed(2)} €\nCelkový zisk/strata: ${totalDiff.toFixed(2)} €`);
-  
+
   const ctx=document.getElementById("chart").getContext("2d");
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
   const max=Math.max(totalTo,totalWith,1);
