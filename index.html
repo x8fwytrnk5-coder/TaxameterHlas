@@ -3,121 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-
-<!--
-Taxi aplikácia – ZiskoMeter
-Autor myšlienky a realizácie: Peter Lukáč
-Rok: 2025
--->
-
 <title>ZiskoMeter</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
 <style>
-body{
-  font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;
-  margin:0;
-  padding:15px;
-  background: linear-gradient(135deg, #fff4e6, #ffd700);
-}
-.container{
-  max-width:700px;
-  margin:auto;
-  background:#fff;
-  padding:15px;
-  border-radius:10px;
-}
-h1{
-  text-align:center;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  gap:10px;
-  font-size:32px;
-  font-weight:700;
-  color:#333;
-  text-shadow:1px 1px 4px rgba(0,0,0,0.3);
-}
-h1 i{
-  color:#FFD700;
-  font-size:45px;
-  filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.5));
-}
+body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;margin:0;padding:15px;background: linear-gradient(135deg, #fff4e6, #ffd700);}
+.container{max-width:700px;margin:auto;background:#fff;padding:15px;border-radius:10px;}
+h1{text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;font-size:32px;font-weight:700;color:#333;text-shadow:1px 1px 4px rgba(0,0,0,0.3);}
+h1 i{color:#FFD700;font-size:45px;filter: drop-shadow(2px 2px 3px rgba(0,0,0,0.5));}
 label{font-weight:600;margin-top:10px;display:block;}
-input,button{
-  width:100%;
-  padding:10px;
-  margin-top:5px;
-  font-size:16px;
-}
-button{
-  background:#007aff;
-  color:#fff;
-  border:none;
-  border-radius:6px;
-}
-#map{
-  height:300px;
-  margin-top:15px;
-  border-radius:8px;
-}
-.result{
-  margin-top:15px;
-  padding:12px;
-  border-radius:6px;
-  font-size:16px;
-}
-footer{
-  margin-top:25px;
-  text-align:center;
-  font-size:13px;
-  color:#666;
-}
-#lockScreen{
-  position:fixed;
-  inset:0;
-  background:#f4f6f8;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  z-index:9999;
-}
-#lockScreen div{
-  background:white;padding:20px;border-radius:10px;max-width:300px;width:100%;
-}
-#pinInput{
-  width:100%;padding:10px;font-size:16px;margin-top:5px;
-}
-#pinMsg{
-  color:red;margin-top:10px;
-}
-.suggestions{
-  position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; z-index:1000;
-  max-height:150px; overflow-y:auto;
-}
-.suggestions div{
-  padding:5px;
-  cursor:pointer;
-}
-.suggestions div:hover{
-  background:#eee;
-}
-.autocomplete-wrapper{
-  position:relative;
-}
+input,button{width:100%;padding:10px;margin-top:5px;font-size:16px;}
+button{background:#007aff;color:#fff;border:none;border-radius:6px;}
+#map{height:300px;margin-top:15px;border-radius:8px;}
+.result{margin-top:15px;padding:12px;border-radius:6px;font-size:16px;}
+footer{margin-top:25px;text-align:center;font-size:13px;color:#666;}
+#lockScreen{position:fixed;inset:0;background:#f4f6f8;display:flex;align-items:center;justify-content:center;z-index:9999;}
+#lockScreen div{background:white;padding:20px;border-radius:10px;max-width:300px;width:100%;}
+#pinInput{width:100%;padding:10px;font-size:16px;margin-top:5px;}
+#pinMsg{color:red;margin-top:10px;}
+.suggestions{position:absolute; top:100%; left:0; right:0; background:white; border:1px solid #ccc; z-index:1000; max-height:150px; overflow-y:auto;}
+.suggestions div{padding:5px;cursor:pointer;}
+.suggestions div:hover{background:#eee;}
+.autocomplete-wrapper{position:relative;}
 </style>
 </head>
 
 <body>
 
-<!-- PIN zamykanie -->
+<!-- PIN apky -->
 <div id="lockScreen">
   <div>
     <h3>Zadaj PIN</h3>
     <input type="password" id="pinInput" placeholder="PIN">
-    <button onclick="unlock()">Odomknúť</button>
+    <button onclick="unlockApp()">Odomknúť</button>
     <div id="pinMsg"></div>
   </div>
 </div>
@@ -148,6 +68,39 @@ footer{
 <div id="map"></div>
 <div id="result" class="result">Výsledok sa zobrazí tu</div>
 
+<!-- PIN pre nastavenie sadzieb -->
+<div id="settingsLock" style="display:none; margin-top:10px; padding:10px; border:1px solid #aaa; border-radius:6px;">
+  <label>Zadaj PIN pre úpravu sadzieb</label>
+  <input type="password" id="settingsPin" placeholder="PIN sadzieb">
+  <button onclick="unlockSettings()">Odomknúť nastavenia</button>
+  <div id="settingsPinMsg" style="color:red;margin-top:5px;"></div>
+</div>
+
+<!-- Nastavenie sadzieb -->
+<div id="settings" style="display:none; margin-top:15px; padding:10px; border:1px solid #ccc; border-radius:8px;">
+  <h3>Nastavenie sadzieb</h3>
+  
+  <label>Sadzba za 1 km – trasa po klienta (€)</label>
+  <input id="rateToClient" type="number" step="0.01">
+  
+  <label>Sadzba za 1 km – s klientom (€)</label>
+  <input id="rateWithClient" type="number" step="0.01">
+  
+  <label>Sadzba za 1 hod. čakania (€)</label>
+  <input id="rateWaiting" type="number" step="0.01">
+  
+  <label>Príplatky / služby (€)</label>
+  <input id="extraServices" type="number" step="0.01" placeholder="napr. batožina, VIP...">
+  
+  <button onclick="saveRates()">Uložiť sadzby</button>
+  
+  <hr>
+  <h4>Zmena PIN sadzieb</h4>
+  <label>Nový PIN</label>
+  <input type="password" id="newSettingsPin" placeholder="Zadaj nový PIN">
+  <button onclick="changeSettingsPin()">Uložiť nový PIN</button>
+</div>
+
 <footer>
 © 2025 – Autor: <strong>Peter Lukáč</strong><br>
 Použitie len so súhlasom autora
@@ -158,33 +111,60 @@ Použitie len so súhlasom autora
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
 <script>
-/* --- PIN ZAMYKANIE --- */
-const PIN_HASH = "202cb962ac59075b964b07152d234b70"; // MD5 z "123"
-function unlock(){
+/* --- PIN apky --- */
+const APP_PIN_HASH = "202cb962ac59075b964b07152d234b70"; // MD5 "123"
+function unlockApp(){
   const pin = document.getElementById("pinInput").value;
-  if(CryptoJS.MD5(pin).toString()===PIN_HASH){
-    localStorage.setItem("authorized","true");
+  if(CryptoJS.MD5(pin).toString()===APP_PIN_HASH){
+    localStorage.setItem("authorizedApp","true");
     document.getElementById("lockScreen").style.display="none";
+    document.getElementById("settingsLock").style.display="block";
   }else{
     document.getElementById("pinMsg").textContent="Nesprávny PIN";
   }
 }
-if(localStorage.getItem("authorized")==="true"){
+if(localStorage.getItem("authorizedApp")==="true"){
   document.getElementById("lockScreen").style.display="none";
+  document.getElementById("settingsLock").style.display="block";
+}
+
+/* --- PIN nastavenia sadzieb --- */
+const DEFAULT_SETTINGS_PIN_HASH = "e10adc3949ba59abbe56e057f20f883e"; // MD5 "123456"
+
+function getSettingsPinHash(){
+  return localStorage.getItem("SETTINGS_PIN_HASH") || DEFAULT_SETTINGS_PIN_HASH;
+}
+
+function unlockSettings(){
+  const pin = document.getElementById("settingsPin").value;
+  if(CryptoJS.MD5(pin).toString() === getSettingsPinHash()){
+    document.getElementById("settings").style.display="block";
+    document.getElementById("settingsLock").style.display="none";
+    // Načítať uložené sadzby alebo default
+    document.getElementById("rateToClient").value = localStorage.getItem("rateToClient") || 0.31;
+    document.getElementById("rateWithClient").value = localStorage.getItem("rateWithClient") || 0.85;
+    document.getElementById("rateWaiting").value = localStorage.getItem("rateWaiting") || 10;
+    document.getElementById("extraServices").value = localStorage.getItem("extraServices") || 0;
+  } else {
+    document.getElementById("settingsPinMsg").textContent="Nesprávny PIN";
+  }
+}
+
+function changeSettingsPin(){
+  const newPin = document.getElementById("newSettingsPin").value;
+  if(newPin.length<4){ alert("PIN musí mať aspoň 4 číslice"); return; }
+  const hash = CryptoJS.MD5(newPin).toString();
+  localStorage.setItem("SETTINGS_PIN_HASH", hash);
+  alert("Nový PIN sadzieb bol uložený");
+  document.getElementById("newSettingsPin").value="";
 }
 
 /* --- MAPA --- */
 let map = L.map('map').setView([48.1486,17.1077],13);
-L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
-  attribution:'© OpenStreetMap'
-}).addTo(map);
+L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
 let markers=[];
 
-/* SKRYTÉ SADZBY */
-const COST_PER_KM = 0.31;
-const RIDE_PER_KM = 0.85;
-
-/* GPS */
+/* --- GPS --- */
 let carLocation = null;
 async function reverseGeocode(lat, lon){
   const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
@@ -226,7 +206,6 @@ async function fetchSuggestions(query, loc){
 function setupAutocomplete(inputId, suggestionId){
   const input = document.getElementById(inputId);
   const suggestionBox = document.getElementById(suggestionId);
-
   input.addEventListener("input", async ()=>{
     suggestionBox.innerHTML = "";
     if(!carLocation) return;
@@ -246,6 +225,16 @@ function setupAutocomplete(inputId, suggestionId){
 }
 setupAutocomplete("pickup","pickupSuggestions");
 setupAutocomplete("dropoff","dropoffSuggestions");
+
+/* --- SADZBY --- */
+function getCurrentRates(){
+  return {
+    toClient: parseFloat(localStorage.getItem("rateToClient")) || 0.31,
+    withClient: parseFloat(localStorage.getItem("rateWithClient")) || 0.85,
+    waiting: parseFloat(localStorage.getItem("rateWaiting")) || 10,
+    services: parseFloat(localStorage.getItem("extraServices")) || 0
+  };
+}
 
 /* --- VÝPOČET --- */
 async function calculate(){
@@ -287,8 +276,8 @@ async function calculate(){
     const d1 = await distance(carLoc,pick);
     const d2 = await distance(pick,drop);
 
-    const costs = (d1+d2)*COST_PER_KM;
-    const ride = d2*RIDE_PER_KM;
+    const rates = getCurrentRates();
+    const costs = d1*rates.toClient + d2*rates.withClient + rates.services;
     const diff = price-costs;
 
     result.innerHTML=
