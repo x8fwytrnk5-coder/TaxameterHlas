@@ -67,8 +67,12 @@ footer{margin-top:25px;text-align:center;font-size:13px;color:#333;}
 
 <button onclick="calculate()">Vypočítať</button>
 <button onclick="showStats()">Štatistika dňa</button>
-<button id="startRideBtn">🚖 Začať jazdu</button>
-<button id="toggleWaitBtn">⏱️ Zapnúť čakanie</button>
+
+<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
+  <button id="startRideBtn" style="flex:1">🚖 Začať jazdu</button>
+  <button id="endRideBtn" style="flex:1">⏹️ Ukončiť jazdu</button>
+  <button id="toggleWaitBtn" style="flex:1">⏱️ Čakanie</button>
+</div>
 <p id="waitTime">Čakanie: 0 min</p>
 
 <div id="map"></div>
@@ -273,8 +277,9 @@ function setupVoiceInput(inputId, buttonText){
 setupVoiceInput("pickup", "🎤 Nahrávať nástup");
 setupVoiceInput("dropoff", "🎤 Nahrávať cieľ");
 
-// --- Funkcia Začať jazdu a čakanie ---
+// --- Funkcia Začať jazdu, čakanie a Ukončiť jazdu ---
 let rideActive=false, waitActive=false, waitMinutes=0, waitInterval, rideWatchId;
+
 document.getElementById("startRideBtn").addEventListener("click",()=>{
   if(!carLocation){ alert("GPS nie je dostupné"); return; }
   if(!pickup.value||!dropoff.value){ alert("Zadaj adresu nástupu a cieľa"); return; }
@@ -300,6 +305,18 @@ document.getElementById("toggleWaitBtn").addEventListener("click",()=>{
     waitInterval=setInterval(()=>{ waitMinutes++; document.getElementById("waitTime").textContent=`Čakanie: ${waitMinutes} min`; },60000);
     alert("Čakanie zapnuté");
   } else { clearInterval(waitInterval); alert("Čakanie vypnuté"); }
+});
+
+document.getElementById("endRideBtn").addEventListener("click", () => {
+  if (!rideActive) { alert("Jazda nie je spustená"); return; }
+
+  rideActive = false;
+  if (rideWatchId) navigator.geolocation.clearWatch(rideWatchId);
+  if (waitInterval) clearInterval(waitInterval);
+
+  alert(`Jazda ukončená.\nCelkové čakanie: ${waitMinutes} min`);
+  waitMinutes = 0;
+  document.getElementById("waitTime").textContent = "Čakanie: 0 min";
 });
 </script>
 </body>
