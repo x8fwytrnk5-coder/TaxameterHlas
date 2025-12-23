@@ -167,7 +167,6 @@ function changeSettingsPin(){
 let map = L.map('map').setView([48.1486,17.1077],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
 let markers=[];
-
 let carLocation=null;
 async function reverseGeocode(lat, lon){
   const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
@@ -238,6 +237,7 @@ async function distance(a,b){
   const d=await r.json();
   return d.routes[0].distance/1000;
 }
+
 async function calculate(){
   const result=document.getElementById("result");
   result.textContent="Počítam…";
@@ -247,8 +247,13 @@ async function calculate(){
     const pickupAddr=document.getElementById("pickup").value;
     const dropAddr=document.getElementById("dropoff").value;
     const price=parseFloat(document.getElementById("price").value);
-    if(!pickupAddr||!dropAddr||isNaN(price)){ result.textContent="Vyplň všetky údaje"; return; }
-    if(!carLocation){ result.textContent="GPS poloha nie je dostupná"; return; }
+    if(!pickupAddr||!dropAddr||isNaN(price)){ 
+      result.textContent="Vyplň všetky údaje"; return; 
+    }
+    if(!carLocation){ 
+      result.textContent="GPS poloha nie je dostupná"; return; 
+    }
+
     const carLoc=carLocation;
     let pick={lat:+document.getElementById("pickup").dataset.lat||0, lon:+document.getElementById("pickup").dataset.lon||0};
     let drop={lat:+document.getElementById("dropoff").dataset.lat||0, lon:+document.getElementById("dropoff").dataset.lon||0};
@@ -257,21 +262,28 @@ async function calculate(){
       drop=await geocode(dropAddr);
       if(!pick||!drop){ result.textContent="Adresu sa nepodarilo nájsť"; return; }
     }
+
     markers.push(L.marker([carLoc.lat,carLoc.lon]).addTo(map).bindPopup("Vozidlo"));
     markers.push(L.marker([pick.lat,pick.lon]).addTo(map).bindPopup("Nástup"));
     markers.push(L.marker([drop.lat,drop.lon]).addTo(map).bindPopup("Cieľ"));
+
     const d1 = await distance(carLoc,pick);
     const d2 = await distance(pick,drop);
     const rates = getCurrentRates();
     const costs = d1*rates.toClient + d2*rates.withClient + rates.services;
+    const recommendedPrice = costs;
     const diff = price-costs;
+
     saveRide(price,costs);
+
     result.innerHTML=
-      `Cena jazdy: ${price.toFixed(2)} €<br>
+      `Cena z cenníka: ${price.toFixed(2)} €<br>
+       Doporučená cena: <strong style="color:blue">${recommendedPrice.toFixed(2)} €</strong><br>
        Náklady: ${costs.toFixed(2)} €<br>
        Výsledok: <strong style="color:${diff>=0?'green':'red'}">${diff>=0?'Zisk':'Strata'} ${Math.abs(diff).toFixed(2)} €</strong>`;
   }catch(e){ result.textContent="Chyba výpočtu"; console.error(e);}
 }
+
 function showStats(){
   const rides = JSON.parse(localStorage.getItem("rides")||"[]");
   if(rides.length===0){ alert("Žiadne jazdy na spracovanie."); return; }
