@@ -4,37 +4,118 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZiskoMeter</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 <style>
-body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;margin:0;padding:15px;
-background: linear-gradient(rgba(255,255,255,0.7), rgba(255,255,255,0.7)),
-url('https://cdn.pixabay.com/photo/2018/05/04/15/52/taxi-3376963_1280.jpg') no-repeat center center fixed;
-background-size: cover;}
-.container{max-width:700px;margin:auto;background:rgba(255,255,255,0.95);padding:20px;border-radius:15px;
-box-shadow:0 8px 20px rgba(0,0,0,0.3);}
-h1{text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;font-size:36px;font-weight:700;color:#ffcc00;text-shadow:2px 2px 6px rgba(0,0,0,0.5);}
+/* --- Dizajn --- */
+body{
+  font-family:'Inter',sans-serif;
+  margin:0; padding:0;
+  background: linear-gradient(to bottom right, #4facfe, #00f2fe);
+}
+.container{
+  max-width:700px;
+  margin:auto;
+  background: rgba(255,255,255,0.95);
+  padding:25px;
+  border-radius:20px;
+  box-shadow:0 12px 30px rgba(0,0,0,0.3);
+}
+h1{
+  font-family:'Inter',sans-serif;
+  font-weight:700;
+  font-size:36px;
+  color:#ffcc00;
+  text-shadow:2px 2px 6px rgba(0,0,0,0.4);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:10px;
+}
 h1 i{font-size:50px;}
 label{font-weight:600;margin-top:10px;display:block;}
-input,button{width:100%;padding:12px;margin-top:5px;font-size:16px;border-radius:6px;border:1px solid #ccc;}
-button{background:#007aff;color:#fff;border:none;cursor:pointer;font-weight:600;transition:0.2s;}
-button:hover{background:#005ecb;}
-#map{height:300px;margin-top:15px;border-radius:12px;border:1px solid #ccc;}
-.result,#stats{margin-top:15px;padding:12px;border-radius:10px;font-size:16px;background:#f9f9f9;box-shadow:0 2px 6px rgba(0,0,0,0.2);}
-footer{margin-top:25px;text-align:center;font-size:13px;color:#333;}
-#lockScreen{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9999;}
-#lockScreen div{background:white;padding:25px;border-radius:12px;max-width:320px;width:100%;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
-#pinInput{width:100%;padding:12px;font-size:16px;margin-top:5px;}
-#pinMsg{color:red;margin-top:10px;}
-.suggestions{position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ccc;z-index:1000;max-height:150px;overflow-y:auto;}
+input{
+  border-radius:12px;
+  padding:12px;
+  border:1px solid #ccc;
+  font-size:16px;
+  box-shadow: inset 0 2px 6px rgba(0,0,0,0.1);
+}
+input:focus{
+  outline:none;
+  border-color:#4facfe;
+  box-shadow:0 0 8px rgba(79,172,254,0.5);
+}
+button{
+  padding:14px;
+  font-size:16px;
+  border:none;
+  border-radius:12px;
+  font-weight:600;
+  cursor:pointer;
+  color:#fff;
+  transition:0.3s;
+  background: linear-gradient(135deg,#4facfe,#00f2fe);
+  box-shadow:0 4px 12px rgba(0,0,0,0.2);
+}
+button:hover{
+  transform: translateY(-2px);
+  box-shadow:0 6px 16px rgba(0,0,0,0.25);
+}
+#map{
+  border-radius:15px;
+  border:1px solid #ccc;
+  height:320px;
+  margin-top:15px;
+  box-shadow:0 4px 12px rgba(0,0,0,0.2);
+}
+.result, #stats{
+  padding:16px;
+  border-radius:15px;
+  background:#fff;
+  box-shadow:0 6px 18px rgba(0,0,0,0.15);
+  font-size:16px;
+  margin-top:12px;
+}
+.button-row{
+  display:flex;
+  gap:12px;
+  margin-top:15px;
+  flex-wrap:wrap;
+}
+.button-row button{flex:1;}
+.autocomplete-wrapper{position:relative;}
+.suggestions{
+  position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ccc;z-index:1000;max-height:150px;overflow-y:auto;border-radius:6px;
+}
 .suggestions div{padding:6px;cursor:pointer;}
 .suggestions div:hover{background:#eee;}
-.autocomplete-wrapper{position:relative;}
+#lockScreen{
+  position:fixed;inset:0;
+  background:rgba(0,0,0,0.4);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  z-index:9999;
+}
+#lockScreen div{
+  background:white;
+  padding:25px;
+  border-radius:12px;
+  max-width:320px;
+  width:100%;
+  box-shadow:0 4px 12px rgba(0,0,0,0.3);
+}
+#pinInput{width:100%;padding:12px;font-size:16px;margin-top:5px;}
+#pinMsg{color:red;margin-top:10px;}
 </style>
 </head>
 <body>
 
+<!-- --- Lock Screen PIN --- -->
 <div id="lockScreen">
   <div>
     <h3>Zadaj PIN</h3>
@@ -45,7 +126,7 @@ footer{margin-top:25px;text-align:center;font-size:13px;color:#333;}
 </div>
 
 <div class="container">
-<h1><i class="fa-solid fa-taxi"></i> ZiskoMeter</h1>
+<h1><i class="fas fa-taxi"></i> ZiskoMeter</h1>
 
 <label>Poloha vozidla</label>
 <input id="carPos" placeholder="Načítava sa GPS…" readonly>
@@ -68,10 +149,10 @@ footer{margin-top:25px;text-align:center;font-size:13px;color:#333;}
 <button onclick="calculate()">Vypočítať</button>
 <button onclick="showStats()">Štatistika dňa</button>
 
-<div style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;">
-  <button id="startRideBtn" style="flex:1">🚖 Začať jazdu</button>
-  <button id="endRideBtn" style="flex:1">⏹️ Ukončiť jazdu</button>
-  <button id="toggleWaitBtn" style="flex:1">⏱️ Čakanie</button>
+<div class="button-row">
+  <button id="startRideBtn">🚖 Začať jazdu</button>
+  <button id="endRideBtn">⏹️ Ukončiť jazdu</button>
+  <button id="toggleWaitBtn">⏱️ Čakanie</button>
 </div>
 <p id="waitTime">Čakanie: 0 min</p>
 
@@ -81,57 +162,51 @@ footer{margin-top:25px;text-align:center;font-size:13px;color:#333;}
 </div>
 
 <script>
-// --- PIN aplikácie ---
-const APP_PIN = "123"; 
+// --- PIN ---
+const APP_PIN = "123";
 function unlockApp(){
   const pin = document.getElementById("pinInput").value;
-  if(pin === APP_PIN){
-    document.getElementById("lockScreen").style.display = "none";
-  } else {
-    document.getElementById("pinMsg").textContent = "Nesprávny PIN";
-  }
+  if(pin===APP_PIN){ document.getElementById("lockScreen").style.display="none"; } 
+  else{ document.getElementById("pinMsg").textContent="Nesprávny PIN"; }
 }
 
-// --- GPS a mapa ---
+// --- Mapa a GPS ---
 let map = L.map('map').setView([48.1486,17.1077],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
-let markers=[];
-let carLocation=null;
+let markers=[],carLocation=null;
 
-async function reverseGeocode(lat, lon){
+async function reverseGeocode(lat,lon){
   const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
   const d = await r.json();
   return d.display_name||`${lat.toFixed(5)},${lon.toFixed(5)}`;
 }
-
 navigator.geolocation.getCurrentPosition(async pos=>{
   const lat=pos.coords.latitude;
   const lon=pos.coords.longitude;
   carLocation={lat,lon};
-  const address = await reverseGeocode(lat,lon);
-  document.getElementById("carPos").value = address;
+  document.getElementById("carPos").value = await reverseGeocode(lat,lon);
   map.setView([lat,lon],14);
   markers.push(L.marker([lat,lon]).addTo(map).bindPopup("Vozidlo"));
 });
 
 // --- Autocomplete ---
-async function fetchSuggestions(query, loc){
-  if(!query || !loc) return [];
+async function fetchSuggestions(query,loc){
+  if(!query||!loc) return [];
   const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&viewbox=${loc.lon-0.05},${loc.lat+0.05},${loc.lon+0.05},${loc.lat-0.05}`);
   const d=await r.json();
   return d.map(item=>({display:item.display_name,lat:+item.lat,lon:+item.lon}));
 }
-function setupAutocomplete(inputId, suggestionId){
+function setupAutocomplete(inputId,suggestionId){
   const input=document.getElementById(inputId);
   const suggestionBox=document.getElementById(suggestionId);
-  input.addEventListener("input", async ()=>{
+  input.addEventListener("input",async ()=>{
     suggestionBox.innerHTML="";
     if(!carLocation) return;
-    const results = await fetchSuggestions(input.value, carLocation);
+    const results=await fetchSuggestions(input.value,carLocation);
     results.forEach(r=>{
       const div=document.createElement("div");
       div.textContent=r.display;
-      div.addEventListener("click", ()=>{
+      div.addEventListener("click",()=>{
         input.value=r.display;
         input.dataset.lat=r.lat;
         input.dataset.lon=r.lon;
@@ -144,17 +219,8 @@ function setupAutocomplete(inputId, suggestionId){
 setupAutocomplete("pickup","pickupSuggestions");
 setupAutocomplete("dropoff","dropoffSuggestions");
 
-// --- Ukladanie jázd ---
-function saveRide(price, costs, km){
-  const rides = JSON.parse(localStorage.getItem("rides")||"[]");
-  rides.push({price,costs,km,date:new Date().toISOString()});
-  localStorage.setItem("rides",JSON.stringify(rides));
-}
-
 // --- Výpočty ---
-function getRates(){
-  return {toClient:0.31,withClient:0.85,services:0};
-}
+function getRates(){return {toClient:0.31,withClient:0.85,services:0};}
 async function geocode(addr){
   const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(addr));
   const d=await r.json();
@@ -165,12 +231,16 @@ async function distance(a,b){
   const d=await r.json();
   return d.routes[0].distance/1000;
 }
+function saveRide(price,costs,km){
+  const rides=JSON.parse(localStorage.getItem("rides")||"[]");
+  rides.push({price,costs,km,date:new Date().toISOString()});
+  localStorage.setItem("rides",JSON.stringify(rides));
+}
 async function calculate(){
   const result=document.getElementById("result");
   result.textContent="Počítam…";
   try{
-    markers.forEach(m=>map.removeLayer(m));
-    markers=[];
+    markers.forEach(m=>map.removeLayer(m)); markers=[];
     const pickupAddr=document.getElementById("pickup").value;
     const dropAddr=document.getElementById("dropoff").value;
     const price=parseFloat(document.getElementById("price").value);
@@ -189,13 +259,12 @@ async function calculate(){
     markers.push(L.marker([pick.lat,pick.lon]).addTo(map).bindPopup("Nástup"));
     markers.push(L.marker([drop.lat,drop.lon]).addTo(map).bindPopup("Cieľ"));
 
-    const d1 = await distance(carLocation,pick);
-    const d2 = await distance(pick,drop);
-    const rates = getRates();
-    const costs = d1*rates.toClient + d2*rates.withClient + rates.services;
-    const recommendedPrice = costs*1.2;
-    const diff = price - costs;
-
+    const d1=await distance(carLocation,pick);
+    const d2=await distance(pick,drop);
+    const rates=getRates();
+    const costs=d1*rates.toClient + d2*rates.withClient + rates.services;
+    const recommendedPrice=costs*1.2;
+    const diff=price-costs;
     saveRide(price,costs,d1+d2);
 
     result.innerHTML=
@@ -209,23 +278,16 @@ async function calculate(){
 
 // --- Štatistika ---
 function showStats(){
-  const rides = JSON.parse(localStorage.getItem("rides")||"[]");
-  if(rides.length===0){ alert("Žiadne jazdy na spracovanie."); return; }
+  const rides=JSON.parse(localStorage.getItem("rides")||"[]");
+  if(rides.length===0){ alert("Žiadne jazdy"); return; }
 
-  let totalPrice=0, totalCosts=0, totalKm=0;
-  const avgSpeed = 40;
-  let totalTime=0;
-
+  let totalPrice=0,totalCosts=0,totalKm=0,totalTime=0,avgSpeed=40;
   rides.forEach(r=>{
-    totalPrice += r.price;
-    totalCosts += r.costs;
-    totalKm += r.km;
-    totalTime += r.km/avgSpeed;
+    totalPrice+=r.price; totalCosts+=r.costs; totalKm+=r.km; totalTime+=r.km/avgSpeed;
   });
-
-  const totalProfit = totalPrice - totalCosts;
-  const efficiency = totalPrice ? (totalProfit/totalPrice)*100 : 0;
-  const realKmPrice = totalKm ? totalPrice/totalKm : 0;
+  const totalProfit=totalPrice-totalCosts;
+  const efficiency=totalPrice?totalProfit/totalPrice*100:0;
+  const realKmPrice=totalKm?totalPrice/totalKm:0;
 
   document.getElementById("stats").innerHTML=
     `<h3>Štatistika jázd</h3>
@@ -238,66 +300,48 @@ function showStats(){
      <p>Reálna cena 1 km: ${realKmPrice.toFixed(2)} €/km</p>
      <p>Efektivita: ${efficiency.toFixed(1)}%</p>
      <canvas id="efficiencyChart" width="400" height="200"></canvas>`;
-
   renderChart(rides);
 }
-
 function renderChart(rides){
   const ctx=document.getElementById('efficiencyChart').getContext('2d');
-  const labels = rides.map((r,i)=>`Jazda ${i+1}`);
-  const data = rides.map(r=>r.price-r.costs);
+  const labels=rides.map((r,i)=>`Jazda ${i+1}`);
+  const data=rides.map(r=>r.price-r.costs);
   new Chart(ctx,{
     type:'bar',
-    data:{labels, datasets:[{label:'Zisk/Strata (€)', data, backgroundColor:data.map(v=>v>=0?'green':'red')}]},
-    options:{responsive:true, plugins:{legend:{display:false}, title:{display:true,text:'Efektivita jednotlivých jázd'}}, scales:{y:{beginAtZero:true}}}
+    data:{labels,datasets:[{label:'Zisk/Strata (€)', data, backgroundColor:data.map(v=>v>=0?'green':'red')}]},
+    options:{responsive:true,plugins:{legend:{display:false},title:{display:true,text:'Efektivita jednotlivých jázd'}},scales:{y:{beginAtZero:true}}}
   });
 }
 
 // --- Hlasové zadanie adries ---
-function setupVoiceInput(inputId, buttonText){
-  const input = document.getElementById(inputId);
-  const btn = document.createElement("button");
-  btn.textContent = buttonText;
-  btn.style.marginTop = "5px";
-  input.parentNode.insertBefore(btn, input.nextSibling);
-
-  const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
-  recognition.lang = 'sk-SK';
-  recognition.interimResults = false;
-
-  btn.addEventListener("click", () => { recognition.start(); });
-  recognition.onresult = (event) => {
-    const transcript = event.results[0][0].transcript;
-    input.value = transcript;
-    input.dataset.lat = 0;
-    input.dataset.lon = 0;
-  };
-  recognition.onerror = (event) => { alert("Chyba rozpoznávania hlasu: " + event.error); };
+function setupVoiceInput(inputId,buttonText){
+  const input=document.getElementById(inputId);
+  const btn=document.createElement("button");
+  btn.textContent=buttonText; btn.style.marginTop="5px";
+  input.parentNode.insertBefore(btn,input.nextSibling);
+  const recognition=new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+  recognition.lang='sk-SK'; recognition.interimResults=false;
+  btn.addEventListener("click",()=>{ recognition.start(); });
+  recognition.onresult=(event)=>{ input.value=event.results[0][0].transcript; input.dataset.lat=0; input.dataset.lon=0; };
+  recognition.onerror=(event)=>{ alert("Chyba rozpoznávania hlasu: "+event.error); };
 }
-setupVoiceInput("pickup", "🎤 Nahrávať nástup");
-setupVoiceInput("dropoff", "🎤 Nahrávať cieľ");
+setupVoiceInput("pickup","🎤 Nahrávať nástup");
+setupVoiceInput("dropoff","🎤 Nahrávať cieľ");
 
-// --- Funkcia Začať jazdu, čakanie a Ukončiť jazdu ---
-let rideActive=false, waitActive=false, waitMinutes=0, waitInterval, rideWatchId;
-
+// --- Jazda ---
+let rideActive=false,waitActive=false,waitMinutes=0,waitInterval,rideWatchId;
 document.getElementById("startRideBtn").addEventListener("click",()=>{
   if(!carLocation){ alert("GPS nie je dostupné"); return; }
-  if(!pickup.value||!dropoff.value){ alert("Zadaj adresu nástupu a cieľa"); return; }
-
+  if(!document.getElementById("pickup").value||!document.getElementById("dropoff").value){ alert("Zadaj adresu nástupu a cieľa"); return; }
   rideActive=true;
   alert("Jazda spustená. Marker bude sledovať tvoju polohu.");
-
-  const dest=encodeURIComponent(dropoff.value);
-  window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`,'_blank');
-
   rideWatchId=navigator.geolocation.watchPosition(pos=>{
-    carLocation={lat:pos.coords.latitude, lon:pos.coords.longitude};
+    carLocation={lat:pos.coords.latitude,lon:pos.coords.longitude};
     if(markers.length){ map.removeLayer(markers[0]); markers.shift(); }
     markers.unshift(L.marker([carLocation.lat,carLocation.lon]).addTo(map).bindPopup("Vozidlo"));
     map.setView([carLocation.lat,carLocation.lon]);
-  }, err=>{ console.error(err); }, {enableHighAccuracy:true, maximumAge:1000});
+  },err=>{ console.error(err); },{enableHighAccuracy:true, maximumAge:1000});
 });
-
 document.getElementById("toggleWaitBtn").addEventListener("click",()=>{
   if(!rideActive){ alert("Najprv spusti jazdu."); return; }
   waitActive=!waitActive;
@@ -306,18 +350,16 @@ document.getElementById("toggleWaitBtn").addEventListener("click",()=>{
     alert("Čakanie zapnuté");
   } else { clearInterval(waitInterval); alert("Čakanie vypnuté"); }
 });
-
 document.getElementById("endRideBtn").addEventListener("click", () => {
   if (!rideActive) { alert("Jazda nie je spustená"); return; }
-
   rideActive = false;
   if (rideWatchId) navigator.geolocation.clearWatch(rideWatchId);
   if (waitInterval) clearInterval(waitInterval);
-
   alert(`Jazda ukončená.\nCelkové čakanie: ${waitMinutes} min`);
-  waitMinutes = 0;
-  document.getElementById("waitTime").textContent = "Čakanie: 0 min";
+  waitMinutes=0;
+  document.getElementById("waitTime").textContent="Čakanie: 0 min";
 });
 </script>
+
 </body>
 </html>
