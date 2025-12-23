@@ -4,83 +4,28 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZiskoMeter</title>
-
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-
 <style>
-body{
-  margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;
-  background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);
-  color:white;
-}
-header{
-  padding:16px;
-  text-align:center;
-  font-size:22px;
-  font-weight:700;
-}
+body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);color:white;}
+header{padding:16px;text-align:center;font-size:22px;font-weight:700;}
 .container{padding:15px;}
-input{
-  width:100%;
-  padding:12px;
-  margin-bottom:4px;
-  border-radius:8px;
-  border:none;
-  font-size:16px;
-}
-.suggestions{
-  background:white;
-  color:black;
-  border-radius:8px;
-  margin-bottom:8px;
-  max-height:160px;
-  overflow-y:auto;
-}
-.suggestions div{
-  padding:10px;
-  border-bottom:1px solid #ddd;
-}
-.suggestions div:hover{
-  background:#eee;
-  cursor:pointer;
-}
-button{
-  padding:14px;
-  font-size:16px;
-  border-radius:10px;
-  border:none;
-  cursor:pointer;
-}
-.btn{
-  width:100%;
-  background:#ffcc00;
-  color:black;
-  font-weight:700;
-  margin-bottom:8px;
-}
+input{width:100%;padding:12px;margin-bottom:4px;border-radius:8px;border:none;font-size:16px;}
+.suggestions{background:white;color:black;border-radius:8px;margin-bottom:8px;max-height:160px;overflow-y:auto;}
+.suggestions div{padding:10px;border-bottom:1px solid #ddd;}
+.suggestions div:hover{background:#eee;cursor:pointer;}
+button{padding:14px;font-size:16px;border-radius:10px;border:none;cursor:pointer;}
+.btn{width:100%;background:#ffcc00;color:black;font-weight:700;margin-bottom:8px;}
 .btn-row{display:flex;gap:8px;}
 .btn-row button{flex:1;}
-#map{
-  height:300px;
-  margin-top:10px;
-  border-radius:10px;
-}
-.box{
-  background:rgba(0,0,0,0.35);
-  padding:12px;
-  border-radius:10px;
-  margin-top:10px;
-}
+#map{height:300px;margin-top:10px;border-radius:10px;}
+.box{background:rgba(0,0,0,0.35);padding:12px;border-radius:10px;margin-top:10px;}
 .green{color:#4cff4c;}
 .red{color:#ff5c5c;}
+canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height:200px;}
 </style>
 </head>
-
 <body>
-
 <header>🚖 ZiskoMeter</header>
-
 <div class="container">
 
 <button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
@@ -103,12 +48,15 @@ button{
   <div id="results"></div>
 </div>
 
-<div id="map"></div>
+<div class="box">
+  <button class="btn" onclick="showStats()">📊 Štatistiky dňa</button>
+  <canvas id="chart"></canvas>
+</div>
 
+<div id="map"></div>
 </div>
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
 <script>
 /* ==== KONŠTANTY ==== */
 const RATE_TO_CLIENT = 0.31;
@@ -139,9 +87,7 @@ function getGPS(){
 async function suggest(input,box){
   if(input.value.length<3){ box.innerHTML=""; return; }
   let url=`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(input.value)}`;
-  if(carLat){
-    url+=`&lat=${carLat}&lon=${carLon}`;
-  }
+  if(carLat){ url+=`&lat=${carLat}&lon=${carLon}&bounded=1`; }
   const r=await fetch(url);
   const d=await r.json();
   box.innerHTML="";
@@ -155,7 +101,6 @@ async function suggest(input,box){
     box.appendChild(div);
   });
 }
-
 pickup.oninput=()=>suggest(pickup,pickupSug);
 dropoff.oninput=()=>suggest(dropoff,dropoffSug);
 
@@ -183,25 +128,18 @@ async function calculate(){
     if(!carLat) return alert("Najprv urč polohu vozidla");
     const p=await geocode(pickup.value);
     const d=await geocode(dropoff.value);
-
     pickupLat=p.lat; pickupLon=p.lon;
     dropLat=d.lat; dropLon=d.lon;
-
     if(pickupMarker) map.removeLayer(pickupMarker);
     if(dropMarker) map.removeLayer(dropMarker);
-
     pickupMarker=L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup");
     dropMarker=L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ");
-
     map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
-
     distToClient=km(carLat,carLon,pickupLat,pickupLon);
     distWithClient=km(pickupLat,pickupLon,dropLat,dropLon);
-
     updateResults();
-  }catch(e){
-    alert("Chyba výpočtu");
-  }
+    saveRide();
+  }catch(e){alert("Chyba výpočtu");}
 }
 
 /* ==== VÝSLEDKY ==== */
@@ -210,7 +148,6 @@ function updateResults(){
   const cost=distToClient*RATE_TO_CLIENT+distWithClient*RATE_WITH_CLIENT;
   const recommended=cost*(1+RECOMMENDED_MARGIN);
   const diff=price-cost;
-
   results.innerHTML=`
     <p>🚗 Km po klienta: ${distToClient.toFixed(2)}</p>
     <p>👤 Km s klientom: ${distWithClient.toFixed(2)}</p>
@@ -230,7 +167,38 @@ function navClientRoute(){
   if(!pickupLat||!dropLat) return alert("Chýba trasa");
   window.open(`https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}`);
 }
-</script>
 
+/* ==== ŠTATISTIKY ==== */
+function saveRide(){
+  const price=parseFloat(priceInput.value)||0;
+  const cost=distToClient*RATE_TO_CLIENT+distWithClient*RATE_WITH_CLIENT;
+  const diff=price-cost;
+  const ride={date:new Date().toLocaleDateString(),kmTo:distToClient,kmWith:distWithClient,price,cost,diff};
+  let rides=JSON.parse(localStorage.getItem("rides")||"[]");
+  rides.push(ride);
+  localStorage.setItem("rides",JSON.stringify(rides));
+}
+
+function showStats(){
+  let rides=JSON.parse(localStorage.getItem("rides")||"[]");
+  if(!rides.length){ alert("Žiadne jazdy"); return; }
+  const totalTo=rides.reduce((a,r)=>a+r.kmTo,0);
+  const totalWith=rides.reduce((a,r)=>a+r.kmWith,0);
+  const totalCost=rides.reduce((a,r)=>a+r.cost,0);
+  const totalPrice=rides.reduce((a,r)=>a+r.price,0);
+  const totalDiff=rides.reduce((a,r)=>a+r.diff,0);
+  alert(`Počet jázd: ${rides.length}\nKm po klienta: ${totalTo.toFixed(2)}\nKm s klientom: ${totalWith.toFixed(2)}\nNáklady: ${totalCost.toFixed(2)} €\nCena z cenníka: ${totalPrice.toFixed(2)} €\nCelkový zisk/strata: ${totalDiff.toFixed(2)} €`);
+  
+  /* jednoduchý graf */
+  const ctx=document.getElementById("chart").getContext("2d");
+  ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  const max=Math.max(totalTo,totalWith);
+  const w=ctx.canvas.width/2;
+  ctx.fillStyle="#ffcc00";
+  ctx.fillRect(10,ctx.canvas.height-(totalTo/max*150)-10,50,totalTo/max*150);
+  ctx.fillStyle="#4cff4c";
+  ctx.fillRect(100,ctx.canvas.height-(totalWith/max*150)-10,50,totalWith/max*150);
+}
+</script>
 </body>
 </html>
