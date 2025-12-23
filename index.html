@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="sk">
 <head>
@@ -32,6 +31,7 @@ button:hover{transform: translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.25);
 #lockScreen div{background:white;padding:25px;border-radius:12px;max-width:320px;width:100%;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
 #pinInput{width:100%;padding:12px;font-size:16px;margin-top:5px;}
 #pinMsg{color:red;margin-top:10px;}
+audio{width:100%;margin-top:10px;border-radius:12px;}
 </style>
 </head>
 <body>
@@ -73,12 +73,19 @@ button:hover{transform: translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.25);
   <button id="startRideBtn">🚖 Začať jazdu</button>
   <button id="endRideBtn">⏹️ Ukončiť jazdu</button>
   <button id="toggleWaitBtn">⏱️ Čakanie</button>
+  <button onclick="openNav()">🧭 Navigácia</button>
 </div>
 <p id="waitTime">Čakanie: 0 min</p>
 
 <div id="map"></div>
 <div id="result" class="result">Výsledok sa zobrazí tu</div>
-<div id="trafficPanel" class="result">Dopravné správy sa načítajú…</div>
+
+<h3>Dopravné správy – Rádio Expres</h3>
+<audio controls>
+  <source src="https://stream.radioexpres.sk/live/mp3" type="audio/mpeg">
+  Váš prehliadač nepodporuje prehrávanie rádia.
+</audio>
+
 <div id="stats"></div>
 </div>
 
@@ -95,7 +102,7 @@ function unlockApp(){
 let map = L.map('map').setView([48.1486,17.1077],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
 
-let markers=[],carLocation=null;
+let markers=[],carLocation=null,routeLine=null;
 
 async function reverseGeocode(lat,lon){
   const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
@@ -163,7 +170,8 @@ async function calculate(){
   const result=document.getElementById("result");
   result.textContent="Počítam…";
   try{
-    markers.forEach(m=>map.removeLayer(m)); markers=[];
+    markers.slice(1).forEach(m=>map.removeLayer(m));
+    markers=markers.slice(0,1);
     const pickupAddr=document.getElementById("pickup").value;
     const dropAddr=document.getElementById("dropoff").value;
     const price=parseFloat(document.getElementById("price").value);
@@ -178,7 +186,6 @@ async function calculate(){
       if(!pick||!drop){ result.textContent="Adresu sa nepodarilo nájsť"; return; }
     }
 
-    markers.push(L.marker([carLocation.lat,carLocation.lon]).addTo(map).bindPopup("Vozidlo"));
     markers.push(L.marker([pick.lat,pick.lon]).addTo(map).bindPopup("Nástup"));
     markers.push(L.marker([drop.lat,drop.lon]).addTo(map).bindPopup("Cieľ"));
 
@@ -197,6 +204,14 @@ async function calculate(){
        Celkové km: ${(d1+d2).toFixed(2)} km<br>
        Výsledok: <strong style="color:${diff>=0?'green':'red'}">${diff>=0?'Zisk':'Strata'} ${Math.abs(diff).toFixed(2)} €</strong>`;
   }catch(e){ result.textContent="Chyba výpočtu"; console.error(e);}
+}
+
+// --- Navigácia ---
+function openNav(){
+  const dropLat = +document.getElementById("dropoff").dataset.lat;
+  const dropLon = +document.getElementById("dropoff").dataset.lon;
+  if(!dropLat||!dropLon){ alert("Zadaj cieľ klienta"); return; }
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${dropLat},${dropLon}`,'_blank');
 }
 
 // --- Štatistika ---
@@ -267,23 +282,6 @@ document.getElementById("endRideBtn").addEventListener("click", () => {
   waitMinutes=0;
   document.getElementById("waitTime").textContent="Čakanie: 0 min";
 });
-
-// --- Dopravné správy (mock) ---
-async function loadTraffic(){
-  try{
-    const r=await fetch("https://api.mocki.io/v2/79f3c4f4"); // mock feed
-    const data=await r.json();
-    const panel=document.getElementById("trafficPanel");
-    panel.innerHTML="<h3>Dopravné správy</h3>";
-    data.forEach(item=>{
-      const p=document.createElement("p");
-      p.textContent=`${item.time} – ${item.message}`;
-      panel.appendChild(p);
-    });
-  }catch(e){ console.error("Chyba načítania dopravných správ:",e); document.getElementById("trafficPanel").textContent="Dopravné správy nie sú dostupné";}
-}
-loadTraffic();
-
 </script>
 </body>
 </html>
