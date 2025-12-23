@@ -175,7 +175,6 @@ async function calculate(){
 
     map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
 
-    // Výpočet vzdialeností
     distToClient = km(carLat,carLon,pickupLat,pickupLon) || 0;
     distWithClient = km(pickupLat,pickupLon,dropLat,dropLon) || 0;
 
@@ -215,11 +214,11 @@ function saveRide(){
   const diff=price-cost;
   const ride={
     date:new Date().toLocaleDateString(),
-    kmTo:distToClient || 0,
-    kmWith:distWithClient || 0,
-    price: price,
-    cost: cost,
-    diff: diff
+    kmTo:Number(distToClient.toFixed(2))||0,
+    kmWith:Number(distWithClient.toFixed(2))||0,
+    cost:Number(cost.toFixed(2)),
+    price:Number(price.toFixed(2)),
+    diff:Number(diff.toFixed(2))
   };
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   rides.push(ride);
@@ -230,19 +229,27 @@ function showStats(){
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   if(!rides.length){ alert("Žiadne jazdy"); return; }
 
-  const totalTo=rides.reduce((a,r)=>a+(parseFloat(r.kmTo)||0),0);
-  const totalWith=rides.reduce((a,r)=>a+(parseFloat(r.kmWith)||0),0);
-  const totalCost=rides.reduce((a,r)=>a+(parseFloat(r.cost)||0),0);
-  const totalPrice=rides.reduce((a,r)=>a+(parseFloat(r.price)||0),0);
-  const totalDiff=rides.reduce((a,r)=>a+(parseFloat(r.diff)||0),0);
+  let totalKmTo=0, totalKmWith=0, totalCost=0, totalPrice=0, totalDiff=0;
+  rides.forEach(r=>{
+    totalKmTo+=Number(r.kmTo)||0;
+    totalKmWith+=Number(r.kmWith)||0;
+    totalCost+=Number(r.cost)||0;
+    totalPrice+=Number(r.price)||0;
+    totalDiff+=Number(r.diff)||0;
+  });
 
-  alert(`Počet jázd: ${rides.length}\nKm po klienta: ${totalTo.toFixed(2)}\nKm s klientom: ${totalWith.toFixed(2)}\nNáklady: ${totalCost.toFixed(2)} €\nCena z cenníka: ${totalPrice.toFixed(2)} €\nCelkový zisk/strata: ${totalDiff.toFixed(2)} €`);
+  alert(`Počet jázd: ${rides.length}
+Km po klienta: ${totalKmTo.toFixed(2)}
+Km s klientom: ${totalKmWith.toFixed(2)}
+Náklady: ${totalCost.toFixed(2)} €
+Cena z cenníka: ${totalPrice.toFixed(2)} €
+Celkový zisk/strata: ${totalDiff.toFixed(2)} €`);
 
   const ctx=document.getElementById("chart").getContext("2d");
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
-  const max=Math.max(totalTo,totalWith,1);
-  ctx.fillStyle="#ffcc00"; ctx.fillRect(10,ctx.canvas.height-(totalTo/max*150)-10,50,totalTo/max*150);
-  ctx.fillStyle="#4cff4c"; ctx.fillRect(100,ctx.canvas.height-(totalWith/max*150)-10,50,totalWith/max*150);
+  const max=Math.max(totalKmTo,totalKmWith,1);
+  ctx.fillStyle="#ffcc00"; ctx.fillRect(10,ctx.canvas.height-(totalKmTo/max*150)-10,50,totalKmTo/max*150);
+  ctx.fillStyle="#4cff4c"; ctx.fillRect(100,ctx.canvas.height-(totalKmWith/max*150)-10,50,totalKmWith/max*150);
 }
 
 /* ==== PIN MODAL ==== */
@@ -253,9 +260,7 @@ function checkPin(){
     alert("PIN správny – tu sa dajú meniť sadzby");
     document.getElementById("pinModal").style.display="none";
     document.getElementById("pinInput").value="";
-  } else {
-    alert("PIN nesprávny");
-  }
+  } else { alert("PIN nesprávny"); }
 }
 </script>
 </body>
