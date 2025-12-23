@@ -8,34 +8,27 @@
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="https://kit.fontawesome.com/a076d05399.js" crossorigin="anonymous"></script>
 <style>
 body{font-family:'Inter',sans-serif;margin:0;padding:0;background:linear-gradient(to bottom right,#4facfe,#00f2fe);}
 .container{max-width:700px;margin:auto;background: rgba(255,255,255,0.95);padding:25px;border-radius:20px;box-shadow:0 12px 30px rgba(0,0,0,0.3);}
-h1{font-weight:700;font-size:36px;color:#ffcc00;text-shadow:2px 2px 6px rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;gap:10px;}
-h1 i{font-size:50px;}
+h1{font-weight:700;font-size:36px;color:#ffcc00;text-shadow:2px 2px 6px rgba(0,0,0,0.4);}
 label{font-weight:600;margin-top:10px;display:block;}
 input{border-radius:12px;padding:12px;border:1px solid #ccc;font-size:16px;box-shadow: inset 0 2px 6px rgba(0,0,0,0.1);}
 input:focus{outline:none;border-color:#4facfe;box-shadow:0 0 8px rgba(79,172,254,0.5);}
 button{padding:14px;font-size:16px;border:none;border-radius:12px;font-weight:600;cursor:pointer;color:#fff;transition:0.3s;background:linear-gradient(135deg,#4facfe,#00f2fe);box-shadow:0 4px 12px rgba(0,0,0,0.2);}
 button:hover{transform: translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.25);}
-#map{border-radius:15px;border:1px solid #ccc;height:320px;margin-top:15px;box-shadow:0 4px 12px rgba(0,0,0,0.2);}
-.result, #stats, #trafficPanel{padding:16px;border-radius:15px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.15);font-size:16px;margin-top:12px;}
+#map{border-radius:15px;border:1px solid #ccc;height:400px;margin-top:15px;box-shadow:0 4px 12px rgba(0,0,0,0.2);}
+.result, #stats{padding:16px;border-radius:15px;background:#fff;box-shadow:0 6px 18px rgba(0,0,0,0.15);font-size:16px;margin-top:12px;}
 .button-row{display:flex;gap:12px;margin-top:15px;flex-wrap:wrap;}
 .button-row button{flex:1;}
-.autocomplete-wrapper{position:relative;}
-.suggestions{position:absolute;top:100%;left:0;right:0;background:white;border:1px solid #ccc;z-index:1000;max-height:150px;overflow-y:auto;border-radius:6px;}
-.suggestions div{padding:6px;cursor:pointer;}
-.suggestions div:hover{background:#eee;}
 #lockScreen{position:fixed;inset:0;background:rgba(0,0,0,0.4);display:flex;align-items:center;justify-content:center;z-index:9999;}
 #lockScreen div{background:white;padding:25px;border-radius:12px;max-width:320px;width:100%;box-shadow:0 4px 12px rgba(0,0,0,0.3);}
 #pinInput{width:100%;padding:12px;font-size:16px;margin-top:5px;}
 #pinMsg{color:red;margin-top:10px;}
-audio{width:100%;margin-top:10px;border-radius:12px;}
+.poi-marker{background:orange;color:white;padding:4px 8px;border-radius:6px;font-size:12px;font-weight:600;}
 </style>
 </head>
 <body>
-
 <div id="lockScreen">
   <div>
     <h3>Zadaj PIN</h3>
@@ -46,47 +39,39 @@ audio{width:100%;margin-top:10px;border-radius:12px;}
 </div>
 
 <div class="container">
-<h1><i class="fas fa-taxi"></i> ZiskoMeter</h1>
+<h1>ZiskoMeter</h1>
 
 <label>Poloha vozidla</label>
 <input id="carPos" placeholder="Načítava sa GPS…" readonly>
 
 <label>Miesto nástupu klienta</label>
-<div class="autocomplete-wrapper">
-  <input id="pickup" placeholder="Zadaj adresu" autocomplete="off">
-  <div id="pickupSuggestions" class="suggestions"></div>
-</div>
+<input id="pickup" placeholder="Zadaj adresu">
 
 <label>Cieľ klienta</label>
-<div class="autocomplete-wrapper">
-  <input id="dropoff" placeholder="Zadaj cieľ" autocomplete="off">
-  <div id="dropoffSuggestions" class="suggestions"></div>
-</div>
+<input id="dropoff" placeholder="Zadaj cieľ">
 
 <label>Cena z cenníka (€)</label>
 <input id="price" type="number" placeholder="Zadá vodič">
 
 <button onclick="calculate()">Vypočítať</button>
-<button onclick="showStats()">Štatistika dňa</button>
 
 <div class="button-row">
   <button id="startRideBtn">🚖 Začať jazdu</button>
   <button id="endRideBtn">⏹️ Ukončiť jazdu</button>
   <button id="toggleWaitBtn">⏱️ Čakanie</button>
   <button onclick="openNav()">🧭 Navigácia</button>
+  <button onclick="openNDS()">🛣️ Dopravné správy NDS</button>
 </div>
 <p id="waitTime">Čakanie: 0 min</p>
-
 <div id="map"></div>
 <div id="result" class="result">Výsledok sa zobrazí tu</div>
+<div id="stats"></div>
 
 <h3>Dopravné správy – Rádio Expres</h3>
 <audio controls>
   <source src="https://stream.radioexpres.sk/live/mp3" type="audio/mpeg">
   Váš prehliadač nepodporuje prehrávanie rádia.
 </audio>
-
-<div id="stats"></div>
 </div>
 
 <script>
@@ -102,7 +87,7 @@ function unlockApp(){
 let map = L.map('map').setView([48.1486,17.1077],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
 
-let markers=[],carLocation=null,routeLine=null;
+let markers=[],carLocation=null;
 
 async function reverseGeocode(lat,lon){
   const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
@@ -119,73 +104,43 @@ navigator.geolocation.getCurrentPosition(async pos=>{
   markers.push(L.marker([lat,lon]).addTo(map).bindPopup("Vozidlo"));
 });
 
-// --- Autocomplete ---
-async function fetchSuggestions(query,loc){
-  if(!query||!loc) return [];
-  const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5&viewbox=${loc.lon-0.05},${loc.lat+0.05},${loc.lon+0.05},${loc.lat-0.05}`);
-  const d=await r.json();
-  return d.map(item=>({display:item.display_name,lat:+item.lat,lon:+item.lon}));
-}
-function setupAutocomplete(inputId,suggestionId){
-  const input=document.getElementById(inputId);
-  const suggestionBox=document.getElementById(suggestionId);
-  input.addEventListener("input",async ()=>{
-    suggestionBox.innerHTML="";
-    if(!carLocation) return;
-    const results=await fetchSuggestions(input.value,carLocation);
-    results.forEach(r=>{
-      const div=document.createElement("div");
-      div.textContent=r.display;
-      div.addEventListener("click",()=>{
-        input.value=r.display;
-        input.dataset.lat=r.lat;
-        input.dataset.lon=r.lon;
-        suggestionBox.innerHTML="";
-      });
-      suggestionBox.appendChild(div);
-    });
-  });
-}
-setupAutocomplete("pickup","pickupSuggestions");
-setupAutocomplete("dropoff","dropoffSuggestions");
-
 // --- Výpočty ---
 function getRates(){return {toClient:0.31,withClient:0.85,services:0};}
+
 async function geocode(addr){
   const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(addr));
   const d=await r.json();
   return d.length?{lat:+d[0].lat,lon:+d[0].lon}:null;
 }
+
 async function distance(a,b){
   const r=await fetch(`https://router.project-osrm.org/route/v1/driving/${a.lon},${a.lat};${b.lon},${b.lat}?overview=false`);
   const d=await r.json();
   return d.routes[0].distance/1000;
 }
+
 function saveRide(price,costs,km){
   const rides=JSON.parse(localStorage.getItem("rides")||"[]");
   rides.push({price,costs,km,date:new Date().toISOString()});
   localStorage.setItem("rides",JSON.stringify(rides));
 }
+
 async function calculate(){
   const result=document.getElementById("result");
   result.textContent="Počítam…";
   try{
-    markers.slice(1).forEach(m=>map.removeLayer(m));
-    markers=markers.slice(0,1);
     const pickupAddr=document.getElementById("pickup").value;
     const dropAddr=document.getElementById("dropoff").value;
     const price=parseFloat(document.getElementById("price").value);
     if(!pickupAddr||!dropAddr||isNaN(price)){ result.textContent="Vyplň údaje"; return; }
     if(!carLocation){ result.textContent="GPS nie je dostupné"; return; }
 
-    let pick={lat:+document.getElementById("pickup").dataset.lat||0, lon:+document.getElementById("pickup").dataset.lon||0};
-    let drop={lat:+document.getElementById("dropoff").dataset.lat||0, lon:+document.getElementById("dropoff").dataset.lon||0};
-    if(pick.lat===0||drop.lat===0){
-      pick=await geocode(pickupAddr);
-      drop=await geocode(dropAddr);
-      if(!pick||!drop){ result.textContent="Adresu sa nepodarilo nájsť"; return; }
-    }
+    let pick=await geocode(pickupAddr);
+    let drop=await geocode(dropAddr);
+    if(!pick||!drop){ result.textContent="Adresu sa nepodarilo nájsť"; return; }
 
+    markers.slice(1).forEach(m=>map.removeLayer(m));
+    markers=markers.slice(0,1);
     markers.push(L.marker([pick.lat,pick.lon]).addTo(map).bindPopup("Nástup"));
     markers.push(L.marker([drop.lat,drop.lon]).addTo(map).bindPopup("Cieľ"));
 
@@ -203,30 +158,88 @@ async function calculate(){
        Náklady: ${costs.toFixed(2)} €<br>
        Celkové km: ${(d1+d2).toFixed(2)} km<br>
        Výsledok: <strong style="color:${diff>=0?'green':'red'}">${diff>=0?'Zisk':'Strata'} ${Math.abs(diff).toFixed(2)} €</strong>`;
-  }catch(e){ result.textContent="Chyba výpočtu"; console.error(e);}
+
+    fetchPOI([pick.lat,pick.lon],[drop.lat,drop.lon]);
+  }catch(e){ result.textContent="Chyba pri výpočte: "+e; console.error(e);}
 }
 
-// --- Navigácia ---
+// --- Jazda a čakanie ---
+let rideActive=false,waitActive=false,waitMinutes=0,waitInterval,rideWatchId;
+
+document.getElementById("startRideBtn").addEventListener("click",()=>{
+  if(!carLocation){ alert("GPS nie je dostupné"); return; }
+  rideActive=true;
+  rideWatchId=navigator.geolocation.watchPosition(pos=>{
+    carLocation={lat:pos.coords.latitude,lon:pos.coords.longitude};
+    if(markers.length){ map.removeLayer(markers[0]); markers.shift(); }
+    markers.unshift(L.marker([carLocation.lat,carLocation.lon]).addTo(map).bindPopup("Vozidlo"));
+    map.setView([carLocation.lat,carLocation.lon]);
+  },err=>{ console.error(err); },{enableHighAccuracy:true, maximumAge:1000});
+});
+
+document.getElementById("toggleWaitBtn").addEventListener("click",()=>{
+  if(!rideActive){ alert("Najprv spusti jazdu."); return; }
+  waitActive=!waitActive;
+  if(waitActive){ waitInterval=setInterval(()=>{ waitMinutes++; document.getElementById("waitTime").textContent=`Čakanie: ${waitMinutes} min`; },60000); }
+  else{ clearInterval(waitInterval); }
+});
+
+document.getElementById("endRideBtn").addEventListener("click",()=>{
+  if(!rideActive){ alert("Jazda nebola spustená"); return; }
+  rideActive=false; waitActive=false;
+  clearInterval(waitInterval);
+  if(rideWatchId){ navigator.geolocation.clearWatch(rideWatchId); rideWatchId=null; }
+  alert("Jazda ukončená");
+  showStats();
+});
+
+// --- Navigácia a NDS ---
+function openNDS(){ window.open('https://www.ndsas.sk/dopravne-informacie/','_blank'); }
 function openNav(){
-  const dropLat = +document.getElementById("dropoff").dataset.lat;
-  const dropLon = +document.getElementById("dropoff").dataset.lon;
+  const dropLat = +document.getElementById("dropoff").dataset.lat || 0;
+  const dropLon = +document.getElementById("dropoff").dataset.lon || 0;
   if(!dropLat||!dropLon){ alert("Zadaj cieľ klienta"); return; }
   window.open(`https://www.google.com/maps/dir/?api=1&destination=${dropLat},${dropLon}`,'_blank');
 }
 
-// --- Štatistika ---
+// --- POI ---
+let poiMarkers=[];
+async function fetchPOI(start,end){
+  const [startLat,startLon]=start;
+  const [endLat,endLon]=end;
+  const bbox=[
+    Math.min(startLat,endLat)-0.01,
+    Math.min(startLon,endLon)-0.01,
+    Math.max(startLat,endLat)+0.01,
+    Math.max(startLon,endLon)+0.01
+  ];
+  const query=`[out:json];(node["amenity"~"restaurant|cafe|fast_food|hotel|hostel"](${bbox[0]},${bbox[1]},${bbox[2]},${bbox[3]}););out center;`;
+  try{
+    const r=await fetch("https://overpass-api.de/api/interpreter?data="+encodeURIComponent(query));
+    const d=await r.json();
+    d.elements.forEach(el=>{
+      const marker=L.marker([el.lat,el.lon],{icon:L.divIcon({className:'poi-marker'})}).addTo(map)
+        .bindPopup(`${el.tags.name||el.tags.amenity}<br><button onclick="addWaypoint(${el.lat},${el.lon})">Pridať do trasy</button>`);
+      poiMarkers.push(marker);
+    });
+  }catch(e){ console.error("POI load error:",e);}
+}
+function addWaypoint(lat,lon){
+  document.getElementById("dropoff").dataset.lat=lat;
+  document.getElementById("dropoff").dataset.lon=lon;
+  document.getElementById("dropoff").value=`Waypoint (${lat.toFixed(5)},${lon.toFixed(5)})`;
+  alert("Waypoint pridaný do cieľa. Prepočítaj trasu.");
+}
+
+// --- Štatistika a graf ---
 function showStats(){
   const rides=JSON.parse(localStorage.getItem("rides")||"[]");
   if(rides.length===0){ alert("Žiadne jazdy"); return; }
-
   let totalPrice=0,totalCosts=0,totalKm=0,totalTime=0,avgSpeed=40;
-  rides.forEach(r=>{
-    totalPrice+=r.price; totalCosts+=r.costs; totalKm+=r.km; totalTime+=r.km/avgSpeed;
-  });
+  rides.forEach(r=>{ totalPrice+=r.price; totalCosts+=r.costs; totalKm+=r.km; totalTime+=r.km/avgSpeed; });
   const totalProfit=totalPrice-totalCosts;
   const efficiency=totalPrice?totalProfit/totalPrice*100:0;
   const realKmPrice=totalKm?totalPrice/totalKm:0;
-
   document.getElementById("stats").innerHTML=
     `<h3>Štatistika jázd</h3>
      <p>Počet jázd: ${rides.length}</p>
@@ -250,38 +263,6 @@ function renderChart(rides){
     options:{responsive:true,plugins:{legend:{display:false},title:{display:true,text:'Efektivita jednotlivých jázd'}},scales:{y:{beginAtZero:true}}}
   });
 }
-
-// --- Jazda ---
-let rideActive=false,waitActive=false,waitMinutes=0,waitInterval,rideWatchId;
-document.getElementById("startRideBtn").addEventListener("click",()=>{
-  if(!carLocation){ alert("GPS nie je dostupné"); return; }
-  if(!document.getElementById("pickup").value||!document.getElementById("dropoff").value){ alert("Zadaj adresu nástupu a cieľa"); return; }
-  rideActive=true;
-  alert("Jazda spustená. Marker bude sledovať tvoju polohu.");
-  rideWatchId=navigator.geolocation.watchPosition(pos=>{
-    carLocation={lat:pos.coords.latitude,lon:pos.coords.longitude};
-    if(markers.length){ map.removeLayer(markers[0]); markers.shift(); }
-    markers.unshift(L.marker([carLocation.lat,carLocation.lon]).addTo(map).bindPopup("Vozidlo"));
-    map.setView([carLocation.lat,carLocation.lon]);
-  },err=>{ console.error(err); },{enableHighAccuracy:true, maximumAge:1000});
-});
-document.getElementById("toggleWaitBtn").addEventListener("click",()=>{
-  if(!rideActive){ alert("Najprv spusti jazdu."); return; }
-  waitActive=!waitActive;
-  if(waitActive){
-    waitInterval=setInterval(()=>{ waitMinutes++; document.getElementById("waitTime").textContent=`Čakanie: ${waitMinutes} min`; },60000);
-    alert("Čakanie zapnuté");
-  } else { clearInterval(waitInterval); alert("Čakanie vypnuté"); }
-});
-document.getElementById("endRideBtn").addEventListener("click", () => {
-  if (!rideActive) { alert("Jazda nie je spustená"); return; }
-  rideActive = false;
-  if (rideWatchId) navigator.geolocation.clearWatch(rideWatchId);
-  if (waitInterval) clearInterval(waitInterval);
-  alert(`Jazda ukončená.\nCelkové čakanie: ${waitMinutes} min`);
-  waitMinutes=0;
-  document.getElementById("waitTime").textContent="Čakanie: 0 min";
-});
 </script>
 </body>
 </html>
