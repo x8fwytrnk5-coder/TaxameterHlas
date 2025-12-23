@@ -12,7 +12,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,Segoe UI,Roboto,Arial;margin:0
 background: linear-gradient(rgba(255,255,255,0.7), rgba(255,255,255,0.7)),
 url('https://cdn.pixabay.com/photo/2018/05/04/15/52/taxi-3376963_1280.jpg') no-repeat center center fixed;
 background-size: cover;}
-.container{max-width:700px;margin:auto;background:rgba(255,255,255,0.9);padding:20px;border-radius:15px;
+.container{max-width:700px;margin:auto;background:rgba(255,255,255,0.95);padding:20px;border-radius:15px;
 box-shadow:0 8px 20px rgba(0,0,0,0.3);}
 h1{text-align:center;display:flex;align-items:center;justify-content:center;gap:10px;font-size:36px;font-weight:700;color:#ffcc00;text-shadow:2px 2px 6px rgba(0,0,0,0.5);}
 h1 i{font-size:50px;}
@@ -67,6 +67,9 @@ footer{margin-top:25px;text-align:center;font-size:13px;color:#333;}
 
 <button onclick="calculate()">Vypočítať</button>
 <button onclick="showStats()">Štatistika dňa</button>
+<button id="startRideBtn">🚖 Začať jazdu</button>
+<button id="toggleWaitBtn">⏱️ Zapnúť čakanie</button>
+<p id="waitTime">Čakanie: 0 min</p>
 
 <div id="map"></div>
 <div id="result" class="result">Výsledok sa zobrazí tu</div>
@@ -235,29 +238,14 @@ function showStats(){
   renderChart(rides);
 }
 
-// --- Graf ---
 function renderChart(rides){
   const ctx=document.getElementById('efficiencyChart').getContext('2d');
   const labels = rides.map((r,i)=>`Jazda ${i+1}`);
   const data = rides.map(r=>r.price-r.costs);
   new Chart(ctx,{
     type:'bar',
-    data:{
-      labels:labels,
-      datasets:[{
-        label:'Zisk/Strata (€)',
-        data:data,
-        backgroundColor:data.map(v=>v>=0?'green':'red')
-      }]
-    },
-    options:{
-      responsive:true,
-      plugins:{
-        legend:{display:false},
-        title:{display:true,text:'Efektivita jednotlivých jázd'}
-      },
-      scales:{y:{beginAtZero:true}}
-    }
+    data:{labels, datasets:[{label:'Zisk/Strata (€)', data, backgroundColor:data.map(v=>v>=0?'green':'red')}]},
+    options:{responsive:true, plugins:{legend:{display:false}, title:{display:true,text:'Efektivita jednotlivých jázd'}}, scales:{y:{beginAtZero:true}}}
   });
 }
 
@@ -273,23 +261,46 @@ function setupVoiceInput(inputId, buttonText){
   recognition.lang = 'sk-SK';
   recognition.interimResults = false;
 
-  btn.addEventListener("click", () => {
-    recognition.start();
-  });
-
+  btn.addEventListener("click", () => { recognition.start(); });
   recognition.onresult = (event) => {
     const transcript = event.results[0][0].transcript;
     input.value = transcript;
     input.dataset.lat = 0;
     input.dataset.lon = 0;
   };
-
-  recognition.onerror = (event) => {
-    alert("Chyba rozpoznávania hlasu: " + event.error);
-  };
+  recognition.onerror = (event) => { alert("Chyba rozpoznávania hlasu: " + event.error); };
 }
 setupVoiceInput("pickup", "🎤 Nahrávať nástup");
 setupVoiceInput("dropoff", "🎤 Nahrávať cieľ");
+
+// --- Funkcia Začať jazdu a čakanie ---
+let rideActive=false, waitActive=false, waitMinutes=0, waitInterval, rideWatchId;
+document.getElementById("startRideBtn").addEventListener("click",()=>{
+  if(!carLocation){ alert("GPS nie je dostupné"); return; }
+  if(!pickup.value||!dropoff.value){ alert("Zadaj adresu nástupu a cieľa"); return; }
+
+  rideActive=true;
+  alert("Jazda spustená. Marker bude sledovať tvoju polohu.");
+
+  const dest=encodeURIComponent(dropoff.value);
+  window.open(`https://www.google.com/maps/dir/?api=1&destination=${dest}&travelmode=driving`,'_blank');
+
+  rideWatchId=navigator.geolocation.watchPosition(pos=>{
+    carLocation={lat:pos.coords.latitude, lon:pos.coords.longitude};
+    if(markers.length){ map.removeLayer(markers[0]); markers.shift(); }
+    markers.unshift(L.marker([carLocation.lat,carLocation.lon]).addTo(map).bindPopup("Vozidlo"));
+    map.setView([carLocation.lat,carLocation.lon]);
+  }, err=>{ console.error(err); }, {enableHighAccuracy:true, maximumAge:1000});
+});
+
+document.getElementById("toggleWaitBtn").addEventListener("click",()=>{
+  if(!rideActive){ alert("Najprv spusti jazdu."); return; }
+  waitActive=!waitActive;
+  if(waitActive){
+    waitInterval=setInterval(()=>{ waitMinutes++; document.getElementById("waitTime").textContent=`Čakanie: ${waitMinutes} min`; },60000);
+    alert("Čakanie zapnuté");
+  } else { clearInterval(waitInterval); alert("Čakanie vypnuté"); }
+});
 </script>
 </body>
 </html>
