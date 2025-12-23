@@ -31,45 +31,39 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 <header>🚖 ZiskoMeter</header>
 <div class="container">
 
-<!-- GPS polohy -->
 <button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
 
-<!-- Adresy -->
 <input id="pickup" placeholder="Miesto nástupu klienta" autocomplete="off">
 <div id="pickupSug" class="suggestions"></div>
 
 <input id="dropoff" placeholder="Cieľ klienta" autocomplete="off">
 <div id="dropoffSug" class="suggestions"></div>
 
-<!-- Cenník -->
 <input id="priceInput" type="number" placeholder="Cena z cenníka (€)">
 <button class="btn" onclick="calculate()">📐 Vypočítať trasu</button>
 
-<!-- Tlačidlá navigácie -->
 <div class="btn-row">
-  <button onclick="navToClient()">🚗 Začať jazdu</button>
+  <button onclick="startRide()">🚗 Začať jazdu</button>
+  <button onclick="endRide()">🛑 Ukončiť jazdu</button>
   <button onclick="navClientRoute()">👤 Klient</button>
 </div>
 
-<!-- Výsledky -->
 <div class="box">
   <div id="results"></div>
 </div>
 
-<!-- Štatistiky -->
 <div class="box">
   <button class="btn" onclick="showStats()">📊 Štatistiky dňa</button>
+  <button class="btn" onclick="clearStats()">❌ Zmazať štatistiku</button>
   <canvas id="chart"></canvas>
 </div>
 
-<!-- PIN pre úpravu sadzieb -->
 <div class="box">
   <button class="btn" onclick="showPinModal()">⚙️ Nastavenie sadzieb</button>
 </div>
 
 <div id="map"></div>
 
-<!-- Modálne okno pre SADZBY PIN -->
 <div id="pinModal" class="modal">
   <div class="modal-content">
     <p>Zadaj PIN pre úpravu sadzieb</p>
@@ -80,33 +74,29 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-/* ==== KONŠTANTY ==== */
-const RATE_TO_CLIENT = 0.31;
-const RATE_WITH_CLIENT = 0.85;
-const RECOMMENDED_MARGIN = 0.20;
-let APP_PIN = "0000";
-let SADZBY_PIN = "123456";
+const RATE_TO_CLIENT=0.31;
+const RATE_WITH_CLIENT=0.85;
+const RECOMMENDED_MARGIN=0.20;
+let APP_PIN="0000";
+let SADZBY_PIN="123456";
 
-/* ==== PREMENNÉ ==== */
 let map, carMarker, pickupMarker, dropMarker;
 let carLat, carLon, pickupLat, pickupLon, dropLat, dropLon;
 let distToClient=0, distWithClient=0;
+let currentRide=null;
 
-/* ==== MAPA ==== */
 map=L.map('map').setView([48.15,17.11],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
 
-/* ==== VSTUP DO APLIKÁCIE ==== */
 window.onload = () => { checkAppPin(); } 
 function checkAppPin(){
   const pin = prompt("Zadaj PIN pre vstup do aplikácie:");
-  if(pin !== APP_PIN){
+  if(pin!==APP_PIN){
     alert("Nesprávny PIN. Aplikácia sa zatvára.");
-    document.body.innerHTML = "<h2 style='text-align:center;color:red'>Prístup zamietnutý</h2>";
+    document.body.innerHTML="<h2 style='text-align:center;color:red'>Prístup zamietnutý</h2>";
   }
 }
 
-/* ==== GPS ==== */
 function getGPS(){
   navigator.geolocation.getCurrentPosition(pos=>{
     carLat=pos.coords.latitude;
@@ -117,11 +107,10 @@ function getGPS(){
   },()=>alert("GPS sa nepodarilo načítať"));
 }
 
-/* ==== AUTOCOMPLETE ==== */
 async function suggest(input,box){
   if(input.value.length<3){ box.innerHTML=""; return; }
   let url=`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(input.value)}`;
-  if(carLat){ url+=`&lat=${carLat}&lon=${carLon}&bounded=1`; }
+  if(carLat) url+=`&lat=${carLat}&lon=${carLon}&bounded=1`;
   const r=await fetch(url);
   const d=await r.json();
   box.innerHTML="";
@@ -138,7 +127,6 @@ async function suggest(input,box){
 pickup.oninput=()=>suggest(pickup,pickupSug);
 dropoff.oninput=()=>suggest(dropoff,dropoffSug);
 
-/* ==== GEOKÓD ==== */
 async function geocode(addr){
   const r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(addr)}`);
   const d=await r.json();
@@ -146,48 +134,32 @@ async function geocode(addr){
   return {lat:+d[0].lat,lon:+d[0].lon};
 }
 
-/* ==== VZDIALENOSŤ ==== */
 function km(a,b,c,d){
   const R=6371;
   const dLat=(c-a)*Math.PI/180;
   const dLon=(d-b)*Math.PI/180;
-  const x=Math.sin(dLat/2)**2+
-    Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
+  const x=Math.sin(dLat/2)**2+Math.cos(a*Math.PI/180)*Math.cos(c*Math.PI/180)*Math.sin(dLon/2)**2;
   return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
 }
 
-/* ==== VÝPOČET ==== */
 async function calculate(){
   try{
     if(!carLat) return alert("Najprv urč polohu vozidla");
-
     const p=await geocode(pickup.value);
     const d=await geocode(dropoff.value);
-
     pickupLat=p.lat; pickupLon=p.lon;
     dropLat=d.lat; dropLon=d.lon;
-
     if(pickupMarker) map.removeLayer(pickupMarker);
     if(dropMarker) map.removeLayer(dropMarker);
-
     pickupMarker=L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup").openPopup();
     dropMarker=L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ").openPopup();
-
     map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
-
-    distToClient = km(carLat,carLon,pickupLat,pickupLon) || 0;
-    distWithClient = km(pickupLat,pickupLon,dropLat,dropLon) || 0;
-
+    distToClient=km(carLat,carLon,pickupLat,pickupLon)||0;
+    distWithClient=km(pickupLat,pickupLon,dropLat,dropLon)||0;
     updateResults();
-    saveRide();
-
-  } catch(e){
-    console.error(e);
-    alert("Chyba výpočtu. Skontroluj adresy alebo GPS polohu.");
-  }
+  }catch(e){console.error(e); alert("Chyba výpočtu. Skontroluj adresy alebo GPS polohu.");}
 }
 
-/* ==== VÝSLEDKY ==== */
 function updateResults(){
   const price=parseFloat(priceInput.value)||0;
   const cost=(distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT)||0;
@@ -203,33 +175,30 @@ function updateResults(){
 }
 priceInput.oninput=updateResults;
 
-/* ==== NAVIGÁCIA ==== */
+function startRide(){
+  if(!carLat||!pickupLat||!dropLat) return alert("Chýba GPS alebo adresy");
+  currentRide={startTime:new Date(),kmTo:distToClient,kmWith:distWithClient,cost:distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT,price:parseFloat(priceInput.value)||0};
+  alert("Jazda začala");
+}
+
+function endRide(){
+  if(!currentRide) return alert("Jazda nebola začatá");
+  currentRide.endTime=new Date();
+  currentRide.diff=currentRide.price-currentRide.cost;
+  let rides=JSON.parse(localStorage.getItem("rides")||"[]");
+  rides.push(currentRide);
+  localStorage.setItem("rides",JSON.stringify(rides));
+  currentRide=null;
+  alert("Jazda ukončená a uložená");
+}
+
 function navToClient(){ if(!pickupLat) return alert("Chýba nástup"); window.open(`https://www.google.com/maps/dir/?api=1&destination=${pickupLat},${pickupLon}`);}
 function navClientRoute(){ if(!pickupLat||!dropLat) return alert("Chýba trasa"); window.open(`https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}`);}
-
-/* ==== ŠTATISTIKY ==== */
-function saveRide(){
-  const price=parseFloat(priceInput.value)||0;
-  const cost=(distToClient*RATE_TO_CLIENT + distWithClient*RATE_WITH_CLIENT)||0;
-  const diff=price-cost;
-  const ride={
-    date:new Date().toLocaleDateString(),
-    kmTo:Number(distToClient.toFixed(2))||0,
-    kmWith:Number(distWithClient.toFixed(2))||0,
-    cost:Number(cost.toFixed(2)),
-    price:Number(price.toFixed(2)),
-    diff:Number(diff.toFixed(2))
-  };
-  let rides=JSON.parse(localStorage.getItem("rides")||"[]");
-  rides.push(ride);
-  localStorage.setItem("rides",JSON.stringify(rides));
-}
 
 function showStats(){
   let rides=JSON.parse(localStorage.getItem("rides")||"[]");
   if(!rides.length){ alert("Žiadne jazdy"); return; }
-
-  let totalKmTo=0, totalKmWith=0, totalCost=0, totalPrice=0, totalDiff=0;
+  let totalKmTo=0,totalKmWith=0,totalCost=0,totalPrice=0,totalDiff=0;
   rides.forEach(r=>{
     totalKmTo+=Number(r.kmTo)||0;
     totalKmWith+=Number(r.kmWith)||0;
@@ -237,7 +206,6 @@ function showStats(){
     totalPrice+=Number(r.price)||0;
     totalDiff+=Number(r.diff)||0;
   });
-
   alert(`Počet jázd: ${rides.length}
 Km po klienta: ${totalKmTo.toFixed(2)}
 Km s klientom: ${totalKmWith.toFixed(2)}
@@ -252,15 +220,20 @@ Celkový zisk/strata: ${totalDiff.toFixed(2)} €`);
   ctx.fillStyle="#4cff4c"; ctx.fillRect(100,ctx.canvas.height-(totalKmWith/max*150)-10,50,totalKmWith/max*150);
 }
 
-/* ==== PIN MODAL ==== */
+function clearStats(){
+  if(confirm("Naozaj zmazať všetky uložené jazdy?")){
+    localStorage.removeItem("rides");
+    alert("Štatistika vymazaná");
+    const ctx=document.getElementById("chart").getContext("2d");
+    ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
+  }
+}
+
 function showPinModal(){ document.getElementById("pinModal").style.display="flex"; }
 function checkPin(){
   const val=document.getElementById("pinInput").value;
-  if(val===SADZBY_PIN){
-    alert("PIN správny – tu sa dajú meniť sadzby");
-    document.getElementById("pinModal").style.display="none";
-    document.getElementById("pinInput").value="";
-  } else { alert("PIN nesprávny"); }
+  if(val===SADZBY_PIN){ alert("PIN správny – tu sa dajú meniť sadzby"); document.getElementById("pinModal").style.display="none"; document.getElementById("pinInput").value=""; }
+  else alert("PIN nesprávny");
 }
 </script>
 </body>
