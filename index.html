@@ -45,10 +45,16 @@ button:hover{transform: translateY(-2px);box-shadow:0 6px 16px rgba(0,0,0,0.25);
 <input id="carPos" placeholder="Načítava sa GPS…" readonly>
 
 <label>Miesto nástupu klienta</label>
-<input id="pickup" placeholder="Zadaj adresu">
+<div style="display:flex;gap:8px;">
+  <input id="pickup" placeholder="Zadaj adresu" style="flex:1;">
+  <button onclick="startDictation('pickup')">🎤</button>
+</div>
 
 <label>Cieľ klienta</label>
-<input id="dropoff" placeholder="Zadaj cieľ">
+<div style="display:flex;gap:8px;">
+  <input id="dropoff" placeholder="Zadaj cieľ" style="flex:1;">
+  <button onclick="startDictation('dropoff')">🎤</button>
+</div>
 
 <label>Cena z cenníka (€)</label>
 <input id="price" type="number" placeholder="Zadá vodič">
@@ -83,6 +89,27 @@ function unlockApp(){
   else{ document.getElementById("pinMsg").textContent="Nesprávny PIN"; }
 }
 
+// --- Hlasové zadávanie ---
+function startDictation(fieldId){
+  if(!('webkitSpeechRecognition' in window)){
+    alert("Hlasové zadávanie nie je podporované.");
+    return;
+  }
+  const recognition = new webkitSpeechRecognition();
+  recognition.lang = 'sk-SK';
+  recognition.interimResults = false;
+  recognition.maxAlternatives = 1;
+  recognition.onresult = function(event){
+    const text = event.results[0][0].transcript;
+    document.getElementById(fieldId).value = text;
+  };
+  recognition.onerror = function(event){
+    console.error("Chyba diktovania:", event.error);
+    alert("Chyba diktovania: "+event.error);
+  };
+  recognition.start();
+}
+
 // --- Mapa a GPS ---
 let map = L.map('map').setView([48.1486,17.1077],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'© OpenStreetMap'}).addTo(map);
@@ -90,9 +117,11 @@ L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{attribution:'�
 let markers=[],carLocation=null;
 
 async function reverseGeocode(lat,lon){
-  const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
-  const d = await r.json();
-  return d.display_name||`${lat.toFixed(5)},${lon.toFixed(5)}`;
+  try{
+    const r = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}`);
+    const d = await r.json();
+    return d.display_name||`${lat.toFixed(5)},${lon.toFixed(5)}`;
+  }catch(e){ return `${lat.toFixed(5)},${lon.toFixed(5)}`; }
 }
 
 navigator.geolocation.getCurrentPosition(async pos=>{
@@ -108,9 +137,14 @@ navigator.geolocation.getCurrentPosition(async pos=>{
 function getRates(){return {toClient:0.31,withClient:0.85,services:0};}
 
 async function geocode(addr){
-  const r=await fetch("https://nominatim.openstreetmap.org/search?format=json&q="+encodeURIComponent(addr));
-  const d=await r.json();
-  return d.length?{lat:+d[0].lat,lon:+d[0].lon}:null;
+  if(!addr || addr.trim()==="") return null;
+  try{
+    const url = "https://nominatim.openstreetmap.org/search?format=json&q=" + encodeURIComponent(addr);
+    const response = await fetch(url, {headers:{'Accept-Language':'sk'}});
+    const data = await response.json();
+    if(data.length===0) return null;
+    return {lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon)};
+  }catch(e){ console.error("Chyba geokódovania:", e); return null; }
 }
 
 async function distance(a,b){
@@ -137,7 +171,8 @@ async function calculate(){
 
     let pick=await geocode(pickupAddr);
     let drop=await geocode(dropAddr);
-    if(!pick||!drop){ result.textContent="Adresu sa nepodarilo nájsť"; return; }
+    if(!pick){ result.textContent="Nepodarilo sa nájsť miesto nástupu."; return; }
+    if(!drop){ result.textContent="Nepodarilo sa nájsť cieľ klienta."; return; }
 
     markers.slice(1).forEach(m=>map.removeLayer(m));
     markers=markers.slice(0,1);
