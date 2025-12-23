@@ -22,7 +22,6 @@ button{padding:14px;font-size:16px;border-radius:10px;border:none;cursor:pointer
 .green{color:#4cff4c;}
 .red{color:#ff5c5c;}
 canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height:200px;}
-/* Modálne okno pre PIN */
 .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);justify-content:center;align-items:center;}
 .modal-content{background:#fff;color:#000;padding:20px;border-radius:10px;width:80%;max-width:300px;text-align:center;}
 .modal-content input{width:80%;margin:8px 0;}
@@ -32,6 +31,8 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 <header>🚖 ZiskoMeter</header>
 <div class="container">
 
+<!-- Vstup PIN pre aplikáciu sa spustí pri načítaní -->
+
 <button class="btn" onclick="getGPS()">📍 Určiť polohu vozidla</button>
 
 <input id="pickup" placeholder="Miesto nástupu klienta" autocomplete="off">
@@ -40,6 +41,8 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 <input id="dropoff" placeholder="Cieľ klienta" autocomplete="off">
 <div id="dropoffSug" class="suggestions"></div>
 
+<!-- Cenník pred tlačidlom výpočtu -->
+<input id="priceInput" type="number" placeholder="Cena z cenníka (€)">
 <button class="btn" onclick="calculate()">📐 Vypočítať trasu</button>
 
 <div class="btn-row">
@@ -48,7 +51,6 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 </div>
 
 <div class="box">
-  <input id="priceInput" type="number" placeholder="Cena z cenníka (€)">
   <div id="results"></div>
 </div>
 
@@ -64,7 +66,7 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 
 <div id="map"></div>
 
-<!-- Modálne okno pre PIN -->
+<!-- Modálne okno pre SADZBY PIN -->
 <div id="pinModal" class="modal">
   <div class="modal-content">
     <p>Zadaj PIN pre úpravu sadzieb</p>
@@ -79,7 +81,8 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 const RATE_TO_CLIENT = 0.31;
 const RATE_WITH_CLIENT = 0.85;
 const RECOMMENDED_MARGIN = 0.20;
-let SADZBY_PIN = "123456";
+let APP_PIN = "0000";        // PIN vstupu do aplikácie
+let SADZBY_PIN = "123456";   // PIN pre nastavenie sadzieb
 
 /* ==== PREMENNÉ ==== */
 let map, carMarker, pickupMarker, dropMarker;
@@ -89,6 +92,16 @@ let distToClient=0, distWithClient=0;
 /* ==== MAPA ==== */
 map=L.map('map').setView([48.15,17.11],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
+
+/* ==== VSTUP DO APLIKÁCIE ==== */
+window.onload = () => { checkAppPin(); } 
+function checkAppPin(){
+  const pin = prompt("Zadaj PIN pre vstup do aplikácie:");
+  if(pin !== APP_PIN){
+    alert("Nesprávny PIN. Aplikácia sa zatvára.");
+    document.body.innerHTML = "<h2 style='text-align:center;color:red'>Prístup zamietnutý</h2>";
+  }
+}
 
 /* ==== GPS ==== */
 function getGPS(){
@@ -153,8 +166,8 @@ async function calculate(){
     pickupMarker=L.marker([pickupLat,pickupLon]).addTo(map).bindPopup("Nástup");
     dropMarker=L.marker([dropLat,dropLon]).addTo(map).bindPopup("Cieľ");
     map.fitBounds([[carLat,carLon],[dropLat,dropLon]]);
-    distToClient=distToClient||km(carLat,carLon,pickupLat,pickupLon);
-    distWithClient=distWithClient||km(pickupLat,pickupLon,dropLat,dropLon);
+    distToClient=km(carLat,carLon,pickupLat,pickupLon)||0;
+    distWithClient=km(pickupLat,pickupLon,dropLat,dropLon)||0;
     updateResults();
     saveRide();
   }catch(e){alert("Chyba výpočtu");}
@@ -167,8 +180,8 @@ function updateResults(){
   const recommended=cost*(1+RECOMMENDED_MARGIN);
   const diff=price-cost;
   results.innerHTML=`
-    <p>🚗 Km po klienta: ${(distToClient||0).toFixed(2)}</p>
-    <p>👤 Km s klientom: ${(distWithClient||0).toFixed(2)}</p>
+    <p>🚗 Km po klienta: ${distToClient.toFixed(2)}</p>
+    <p>👤 Km s klientom: ${distWithClient.toFixed(2)}</p>
     <p>💰 Náklady: ${cost.toFixed(2)} €</p>
     <p>📊 Doporučená cena: ${recommended.toFixed(2)} €</p>
     <p class="${diff>=0?'green':'red'}">${diff>=0?'Zisk':'Strata'}: ${diff.toFixed(2)} €</p>
@@ -211,7 +224,6 @@ function showStats(){
   const ctx=document.getElementById("chart").getContext("2d");
   ctx.clearRect(0,0,ctx.canvas.width,ctx.canvas.height);
   const max=Math.max(totalTo,totalWith,1);
-  const w=ctx.canvas.width/2;
   ctx.fillStyle="#ffcc00"; ctx.fillRect(10,ctx.canvas.height-(totalTo/max*150)-10,50,totalTo/max*150);
   ctx.fillStyle="#4cff4c"; ctx.fillRect(100,ctx.canvas.height-(totalWith/max*150)-10,50,totalWith/max*150);
 }
@@ -220,8 +232,13 @@ function showStats(){
 function showPinModal(){ document.getElementById("pinModal").style.display="flex"; }
 function checkPin(){
   const val=document.getElementById("pinInput").value;
-  if(val===SADZBY_PIN){ alert("PIN správny – tu sa dajú meniť sadzby"); document.getElementById("pinModal").style.display="none"; document.getElementById("pinInput").value=""; }
-  else{ alert("PIN nesprávny"); }
+  if(val===SADZBY_PIN){
+    alert("PIN správny – tu sa dajú meniť sadzby");
+    document.getElementById("pinModal").style.display="none";
+    document.getElementById("pinInput").value="";
+  } else {
+    alert("PIN nesprávny");
+  }
 }
 </script>
 </body>
