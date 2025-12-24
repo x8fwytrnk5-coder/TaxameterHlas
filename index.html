@@ -5,218 +5,175 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZiskoMeter</title>
 
-<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css"/>
-
+<link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
 <style>
-body{
-  margin:0;
-  font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto;
-  background:linear-gradient(135deg,#141e30,#243b55);
-  color:#fff;
-}
-header{
-  padding:15px;
-  text-align:center;
-  font-size:22px;
-  font-weight:700;
-  background:rgba(0,0,0,0.4);
-}
-.container{padding:15px}
-.section{
-  background:rgba(255,255,255,0.08);
-  border-radius:14px;
-  padding:15px;
-  margin-bottom:15px;
-}
-label{
-  font-size:14px;
-  opacity:.9;
-  display:block;
-  margin-bottom:4px;
-}
-input{
-  width:100%;
-  padding:12px;
-  border-radius:10px;
-  border:none;
-  font-size:16px;
-  margin-bottom:6px;
-}
-button{
-  padding:12px;
-  border-radius:12px;
-  border:none;
-  font-weight:700;
-  font-size:15px;
-  background:#00c6ff;
-  color:#000;
-}
-.buttons{
-  display:flex;
-  gap:10px;
-  margin-top:10px;
-}
-.suggestions{
-  background:#fff;
-  color:#000;
-  border-radius:10px;
-  max-height:180px;
-  overflow-y:auto;
-}
-.suggestions div{
-  padding:8px;
-  border-bottom:1px solid #ddd;
-}
-.suggestions div:hover{background:#eee}
-#map{
-  height:240px;
-  border-radius:14px;
-}
-.green{color:#00ff99}
-.orange{color:#ffcc00}
-.red{color:#ff6b6b}
-.big{
-  font-size:20px;
-  font-weight:700;
-}
-footer{
-  text-align:center;
-  font-size:12px;
-  opacity:.6;
-  padding:10px;
-}
+body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg,#0f2027,#203a43,#2c5364); color:#fff; margin:0; padding:20px; }
+h1 { text-align:center; margin-bottom:10px; }
+.card { background: rgba(255,255,255,0.08); border-radius:14px; padding:15px; margin-bottom:15px; }
+label { display:block; margin-top:10px; font-size:14px; }
+input { width:100%; padding:10px; border-radius:8px; border:none; margin-top:4px; font-size:16px; }
+button { width:32%; padding:12px; margin-top:10px; border-radius:10px; border:none; background:#00c853; color:#000; font-size:16px; font-weight:bold; margin-right:1%; }
+button.secondary { background:#ff5252; color:#fff; }
+.result { font-size:18px; margin-top:10px; text-align:center; }
+.green { color:#00e676; }
+.red { color:#ff5252; }
+.stat { font-size:14px; margin-top:6px; }
+#mapContainer { height:300px; margin-top:15px; border-radius:10px; }
 </style>
 </head>
 
 <body>
 
-<header>🚕 ZiskoMeter – rozhodni za vodiča</header>
+<h1>ZiskoMeter</h1>
+<p style="text-align:center;font-size:13px;">Autor myšlienky: Peter Lukáč</p>
 
-<div class="container">
-
-<div class="section">
-<label>Poloha vozidla</label>
-<input id="vehicle" placeholder="GPS alebo ručne" oninput="suggest('vehicle','vs')">
-<div id="vs" class="suggestions"></div>
-
-<label>Nástup klienta</label>
-<input id="pickup" placeholder="Zadaj nástup" oninput="suggest('pickup','ps')">
-<div id="ps" class="suggestions"></div>
-
-<label>Cieľ klienta</label>
-<input id="dropoff" placeholder="Zadaj cieľ" oninput="suggest('dropoff','ds')">
-<div id="ds" class="suggestions"></div>
-
-<label>Cena z cenníka (€)</label>
-<input id="price" type="number">
-
-<div class="buttons">
-<button onclick="locate()">📍 Poloha</button>
-<button onclick="calculate()">📐 Vypočítať</button>
-</div>
+<div class="card">
+  <label>Poloha vozidla</label>
+  <input id="carAddress" placeholder="Automaticky alebo ručne">
+  <label>Miesto nástupu klienta</label>
+  <input id="pickupAddress">
+  <label>Cieľ klienta</label>
+  <input id="dropoffAddress">
 </div>
 
-<div class="section">
-<div id="map"></div>
+<div class="card">
+  <label>Cena z cenníka (€)</label>
+  <input id="listedPrice" type="number" step="0.01">
 </div>
 
-<div class="section" id="output"></div>
-
+<div class="card">
+  <button onclick="calculateRide()">Vypočítať</button>
 </div>
 
-<footer>© Peter Lukáč – ZiskoMeter</footer>
+<div class="card">
+  <div class="result" id="costResult"></div>
+  <div class="result" id="recommendedResult"></div>
+  <div class="result" id="profitResult"></div>
+</div>
+
+<div class="card">
+  <button onclick="startRide()">Začať jazdu</button>
+  <button onclick="clientRoute()">Klient</button>
+</div>
+
+<div id="mapContainer"></div>
+
+<div class="card">
+  <h3>Štatistiky</h3>
+  <div class="stat" id="statKm">Km spolu: 0</div>
+  <div class="stat" id="statCost">Náklady: 0 €</div>
+  <div class="stat" id="statRevenue">Tržby: 0 €</div>
+  <div class="stat" id="statProfit">Zisk: 0 €</div>
+  <button class="secondary" onclick="resetStats()">Zmazať štatistiky</button>
+</div>
 
 <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+<script src="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.min.js"></script>
 
 <script>
-const RATE_TO_CLIENT = 0.31;
-const RATE_WITH_CLIENT = 0.85;
-const MARGIN = 1.20;
+// --- SETTINGS ---
+let settings = {
+  pinApp: "0000",
+  pinRates: "123456",
+  rateToClient: 0.31,
+  rateWithClient: 0.85
+};
 
-let map=L.map("map").setView([48.7,19.1],8);
-L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png").addTo(map);
+// --- STATISTICS ---
+let stats = { km:0, cost:0, revenue:0 };
 
-async function suggest(id,box){
-  let q=document.getElementById(id).value;
-  if(q.length<3)return;
-  let r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(q)}`);
-  let d=await r.json();
-  let b=document.getElementById(box); b.innerHTML="";
-  d.forEach(i=>{
-    let div=document.createElement("div");
-    div.textContent=i.display_name;
-    div.onclick=()=>{document.getElementById(id).value=i.display_name;b.innerHTML=""};
-    b.appendChild(div);
-  });
-}
-
-function locate(){
-navigator.geolocation.getCurrentPosition(async p=>{
-let r=await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${p.coords.latitude}&lon=${p.coords.longitude}`);
-let d=await r.json();
-vehicle.value=d.display_name;
+// --- MAP ---
+let map, carMarker, pickupMarker, dropoffMarker, routeLayer, poiMarkers=[];
+document.addEventListener("DOMContentLoaded", function(){
+  map = L.map('mapContainer').setView([48.15,17.12], 10);
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+  if(navigator.geolocation){
+    navigator.geolocation.getCurrentPosition(p=>setCarLocation(p.coords.latitude,p.coords.longitude));
+  }
 });
+
+function setCarLocation(lat,lng){
+  if(carMarker) map.removeLayer(carMarker);
+  carMarker = L.marker([lat,lng]).addTo(map).bindPopup("Vozidlo");
+  map.setView([lat,lng],12);
+}
+function setPickup(lat,lng){
+  if(pickupMarker) map.removeLayer(pickupMarker);
+  pickupMarker = L.marker([lat,lng]).addTo(map).bindPopup("Nástup klienta");
+}
+function setDropoff(lat,lng){
+  if(dropoffMarker) map.removeLayer(dropoffMarker);
+  dropoffMarker = L.marker([lat,lng]).addTo(map).bindPopup("Cieľ klienta");
+}
+function showRoute(fromLat,fromLng,toLat,toLng){
+  if(routeLayer) map.removeLayer(routeLayer);
+  routeLayer = L.Routing.control({
+    waypoints:[L.latLng(fromLat,fromLng),L.latLng(toLat,toLng)],
+    routeWhileDragging:false, show:false
+  }).addTo(map);
+}
+function addPOI(lat,lng,name){
+  let marker=L.marker([lat,lng],{icon:L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/252/252025.png',iconSize:[30,30]})}).addTo(map).bindPopup(name);
+  poiMarkers.push(marker);
+}
+function clearPOI(){poiMarkers.forEach(m=>map.removeLayer(m)); poiMarkers=[];}
+
+// --- ROUTES ---
+function startRide(){
+  if(!carMarker || !pickupMarker){ alert("Najprv zadaj polohu auta a miesto nástupu klienta"); return; }
+  let from=carMarker.getLatLng(), to=pickupMarker.getLatLng();
+  showRoute(from.lat,from.lng,to.lat,to.lng);
+}
+function clientRoute(){
+  if(!pickupMarker || !dropoffMarker){ alert("Najprv zadaj miesto nástupu a cieľa klienta"); return; }
+  let from=pickupMarker.getLatLng(), to=dropoffMarker.getLatLng();
+  showRoute(from.lat,from.lng,to.lat,to.lng);
 }
 
-async function geo(a){
-let r=await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(a)}`);
-let d=await r.json();
-if(!d[0])throw"Adresa nenájdená";
-return[+d[0].lat,+d[0].lon];
+// --- CALCULATION ---
+function roundTaxi(price){
+  let whole=Math.floor(price),decimal=price-whole;
+  if(decimal<=0.24) return whole;
+  if(decimal<=0.49) return whole+0.5;
+  return whole+1;
+}
+function fakeDistance(){return Math.random()*10+5;}
+function calculateRide(){
+  let listedPrice=parseFloat(document.getElementById("listedPrice").value);
+  if(isNaN(listedPrice)) return alert("Zadaj cenu z cenníka");
+
+  let kmToClient=fakeDistance(), kmWithClient=fakeDistance();
+  let costToClient=kmToClient*settings.rateToClient, costWithClient=kmWithClient*settings.rateWithClient;
+  let rawCost=costToClient+costWithClient, totalCost=roundTaxi(rawCost);
+  let rawRecommended=totalCost*1.2, recommended=roundTaxi(rawRecommended);
+  let profit=roundTaxi(listedPrice-totalCost);
+
+  document.getElementById("costResult").innerHTML="Náklady: "+totalCost.toFixed(2)+" €";
+  document.getElementById("recommendedResult").innerHTML="Doporučená cena: "+recommended.toFixed(2)+" €";
+
+  let profitEl=document.getElementById("profitResult");
+  if(profit>=0){profitEl.innerHTML="ZISK: +"+profit.toFixed(2)+" €"; profitEl.className="result green";}
+  else {profitEl.innerHTML="STRATA: "+profit.toFixed(2)+" €"; profitEl.className="result red";}
+
+  stats.km+=kmToClient+kmWithClient;
+  stats.cost+=totalCost;
+  stats.revenue+=listedPrice;
+  updateStats();
 }
 
-function dist(a,b){
-const R=6371;
-let dLat=(b[0]-a[0])*Math.PI/180;
-let dLon=(b[1]-a[1])*Math.PI/180;
-let x=Math.sin(dLat/2)**2+Math.cos(a[0]*Math.PI/180)*Math.cos(b[0]*Math.PI/180)*Math.sin(dLon/2)**2;
-return R*2*Math.atan2(Math.sqrt(x),Math.sqrt(1-x));
+// --- STATISTICS ---
+function updateStats(){
+  document.getElementById("statKm").innerText="Km spolu: "+stats.km.toFixed(1);
+  document.getElementById("statCost").innerText="Náklady: "+stats.cost.toFixed(2)+" €";
+  document.getElementById("statRevenue").innerText="Tržby: "+stats.revenue.toFixed(2)+" €";
+  document.getElementById("statProfit").innerText="Zisk: "+(stats.revenue-stats.cost).toFixed(2)+" €";
 }
+function resetStats(){ if(confirm("Naozaj zmazať štatistiky?")){ stats={km:0,cost:0,revenue:0}; updateStats(); } }
 
-async function calculate(){
-try{
-let v=await geo(vehicle.value);
-let p=await geo(pickup.value);
-let d=await geo(dropoff.value);
+// --- SIMULOVANÉ POI ---
+addPOI(48.1486,17.1077,"Hotel Central");
+addPOI(48.1530,17.1150,"Kaviareň Štart");
 
-let km1=dist(v,p);
-let km2=dist(p,d);
-
-let cost = km1*RATE_TO_CLIENT + km2*RATE_WITH_CLIENT;
-let recommended = cost * MARGIN;
-let listed = +price.value || 0;
-
-let verdict="", cls="", extra="";
-
-if(listed >= recommended){
-  verdict="🟢 JAZDU PRIJMI";
-  cls="green";
-}else{
-  let diff = recommended - listed;
-  verdict=`🟡 NAVRHNI PRÍPLATOK +${diff.toFixed(2)} €`;
-  cls="orange";
-}
-
-output.innerHTML=`
-Po klienta: ${km1.toFixed(1)} km<br>
-S klientom: ${km2.toFixed(1)} km<br><br>
-
-NÁKLADY: <b>${cost.toFixed(2)} €</b><br>
-DOPORUČENÁ CENA: <b>${recommended.toFixed(2)} €</b><br>
-CENA Z CENNÍKA: <b>${listed.toFixed(2)} €</b><br><br>
-
-<div class="big ${cls}">${verdict}</div>
-`;
-
-map.eachLayer(l=>l instanceof L.Marker&&map.removeLayer(l));
-L.marker(v).addTo(map);
-L.marker(p).addTo(map);
-L.marker(d).addTo(map);
-map.fitBounds([v,p,d]);
-
-}catch(e){alert(e)}
-}
 </script>
-
 </body>
 </html>
