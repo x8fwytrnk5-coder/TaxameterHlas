@@ -6,6 +6,7 @@
 <title>ZiskoMeter</title>
 
 <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine/dist/leaflet-routing-machine.css" />
 <style>
 body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; background: linear-gradient(135deg,#0f2027,#203a43,#2c5364); color:#fff; margin:0; padding:20px; }
 h1 { text-align:center; margin-bottom:10px; }
@@ -28,7 +29,7 @@ button.secondary { background:#ff5252; color:#fff; }
 <p style="text-align:center;font-size:13px;">Autor myšlienky: Peter Lukáč</p>
 
 <div class="card">
-  <label>Poloha vozidla</label>
+  <label>Poloha vozidla (GPS)</label>
   <input id="carAddress" placeholder="Automaticky alebo ručne">
   <label>Miesto nástupu klienta</label>
   <input id="pickupAddress">
@@ -54,6 +55,7 @@ button.secondary { background:#ff5252; color:#fff; }
 <div class="card">
   <button onclick="startRide()">Začať jazdu</button>
   <button onclick="clientRoute()">Klient</button>
+  <button onclick="startWaiting()">Čakanie</button>
 </div>
 
 <div id="mapContainer"></div>
@@ -76,20 +78,32 @@ let settings = {
   pinApp: "0000",
   pinRates: "123456",
   rateToClient: 0.31,
-  rateWithClient: 0.85
+  rateWithClient: 0.85,
+  waitingRate: 8 // €/hod
 };
 
 // --- STATISTICS ---
 let stats = { km:0, cost:0, revenue:0 };
+let waitingTime = 0; // simulácia čakania
+let waitingInterval;
+let currentRideStarted = false;
 
 // --- MAP ---
 let map, carMarker, pickupMarker, dropoffMarker, routeLayer, poiMarkers=[];
 document.addEventListener("DOMContentLoaded", function(){
   map = L.map('mapContainer').setView([48.15,17.12], 10);
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{ attribution: '&copy; OpenStreetMap contributors' }).addTo(map);
+
   if(navigator.geolocation){
-    navigator.geolocation.getCurrentPosition(p=>setCarLocation(p.coords.latitude,p.coords.longitude));
+    navigator.geolocation.getCurrentPosition(p=>{
+      let lat=p.coords.latitude, lng=p.coords.longitude;
+      setCarLocation(lat,lng);
+    }, err=>{ console.log("Polohu sa nepodarilo získať"); });
   }
+
+  // POI body
+  addPOI(48.1486,17.1077,"Hotel Central");
+  addPOI(48.1530,17.1150,"Kaviareň Štart");
 });
 
 function setCarLocation(lat,lng){
@@ -116,18 +130,25 @@ function addPOI(lat,lng,name){
   let marker=L.marker([lat,lng],{icon:L.icon({iconUrl:'https://cdn-icons-png.flaticon.com/512/252/252025.png',iconSize:[30,30]})}).addTo(map).bindPopup(name);
   poiMarkers.push(marker);
 }
-function clearPOI(){poiMarkers.forEach(m=>map.removeLayer(m)); poiMarkers=[];}
+function clearPOI(){poiMarkers.forEach(m=>map.removeLayer(m)); poiMarkers=[]);}
 
 // --- ROUTES ---
 function startRide(){
   if(!carMarker || !pickupMarker){ alert("Najprv zadaj polohu auta a miesto nástupu klienta"); return; }
   let from=carMarker.getLatLng(), to=pickupMarker.getLatLng();
   showRoute(from.lat,from.lng,to.lat,to.lng);
+  currentRideStarted=true;
 }
 function clientRoute(){
   if(!pickupMarker || !dropoffMarker){ alert("Najprv zadaj miesto nástupu a cieľa klienta"); return; }
   let from=pickupMarker.getLatLng(), to=dropoffMarker.getLatLng();
-  showRoute(from.lat,from.lng,to.lat,to.lng);
+  showRoute(from.lat,from.lng,to.lat,toLng);
+}
+
+// --- WAITING ---
+function startWaiting(){
+  if(waitingInterval) clearInterval(waitingInterval);
+  waitingInterval = setInterval(()=>{ waitingTime+=1; console.log("Čakáme: "+waitingTime+" min"); },60000);
 }
 
 // --- CALCULATION ---
@@ -137,28 +158,46 @@ function roundTaxi(price){
   if(decimal<=0.49) return whole+0.5;
   return whole+1;
 }
-function fakeDistance(){return Math.random()*10+5;}
 function calculateRide(){
   let listedPrice=parseFloat(document.getElementById("listedPrice").value);
   if(isNaN(listedPrice)) return alert("Zadaj cenu z cenníka");
 
-  let kmToClient=fakeDistance(), kmWithClient=fakeDistance();
-  let costToClient=kmToClient*settings.rateToClient, costWithClient=kmWithClient*settings.rateWithClient;
-  let rawCost=costToClient+costWithClient, totalCost=roundTaxi(rawCost);
-  let rawRecommended=totalCost*1.2, recommended=roundTaxi(rawRecommended);
-  let profit=roundTaxi(listedPrice-totalCost);
+  if(!pickupMarker || !dropoffMarker) return alert("Zadaj adresy nástupu a cieľa klienta");
+
+  // vzdialenosti simulované, neskôr nahradiť skutočným Routing.distance()
+  let kmToClient = routeDistance(carMarker, pickupMarker);
+  let kmWithClient = routeDistance(pickupMarker, dropoffMarker);
+
+  let costToClient = kmToClient * settings.rateToClient;
+  let costWithClient = kmWithClient * settings.rateWithClient;
+  let costWaiting = (waitingTime/60)*settings.waitingRate;
+
+  let rawCost = costToClient + costWithClient + costWaiting;
+  let totalCost = roundTaxi(rawCost);
+  let recommended = roundTaxi(totalCost*1.2);
+  let profit = roundTaxi(listedPrice - totalCost);
 
   document.getElementById("costResult").innerHTML="Náklady: "+totalCost.toFixed(2)+" €";
   document.getElementById("recommendedResult").innerHTML="Doporučená cena: "+recommended.toFixed(2)+" €";
 
   let profitEl=document.getElementById("profitResult");
-  if(profit>=0){profitEl.innerHTML="ZISK: +"+profit.toFixed(2)+" €"; profitEl.className="result green";}
-  else {profitEl.innerHTML="STRATA: "+profit.toFixed(2)+" €"; profitEl.className="result red";}
+  if(profit>=0){ profitEl.innerHTML="ZISK: +"+profit.toFixed(2)+" €"; profitEl.className="result green"; }
+  else { profitEl.innerHTML="STRATA: "+profit.toFixed(2)+" €"; profitEl.className="result red"; }
 
-  stats.km+=kmToClient+kmWithClient;
-  stats.cost+=totalCost;
-  stats.revenue+=listedPrice;
+  stats.km += kmToClient + kmWithClient;
+  stats.cost += totalCost;
+  stats.revenue += listedPrice;
   updateStats();
+}
+function routeDistance(startMarker, endMarker){
+  if(!startMarker || !endMarker) return 0;
+  let latlng1=startMarker.getLatLng(), latlng2=endMarker.getLatLng();
+  let R=6371;
+  let dLat=(latlng2.lat-latlng1.lat)*Math.PI/180;
+  let dLon=(latlng2.lng-latlng1.lng)*Math.PI/180;
+  let a=Math.sin(dLat/2)*Math.sin(dLat/2)+Math.cos(latlng1.lat*Math.PI/180)*Math.cos(latlng2.lat*Math.PI/180)*Math.sin(dLon/2)*Math.sin(dLon/2);
+  let c=2*Math.atan2(Math.sqrt(a),Math.sqrt(1-a));
+  return R*c;
 }
 
 // --- STATISTICS ---
@@ -168,12 +207,14 @@ function updateStats(){
   document.getElementById("statRevenue").innerText="Tržby: "+stats.revenue.toFixed(2)+" €";
   document.getElementById("statProfit").innerText="Zisk: "+(stats.revenue-stats.cost).toFixed(2)+" €";
 }
-function resetStats(){ if(confirm("Naozaj zmazať štatistiky?")){ stats={km:0,cost:0,revenue:0}; updateStats(); } }
-
-// --- SIMULOVANÉ POI ---
-addPOI(48.1486,17.1077,"Hotel Central");
-addPOI(48.1530,17.1150,"Kaviareň Štart");
-
+function resetStats(){
+  if(confirm("Naozaj zmazať štatistiky?")){
+    stats={km:0,cost:0,revenue:0};
+    waitingTime=0;
+    updateStats();
+  }
+}
 </script>
+
 </body>
 </html>
