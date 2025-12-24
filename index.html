@@ -9,7 +9,7 @@
 body{margin:0;font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;background:linear-gradient(135deg,#0f2027,#203a43,#2c5364);color:white;}
 header{padding:16px;text-align:center;font-size:22px;font-weight:700;}
 .container{padding:15px;}
-input{width:100%;padding:12px;margin-bottom:4px;border-radius:8px;border:none;font-size:16px;}
+input, select{width:100%;padding:12px;margin-bottom:4px;border-radius:8px;border:none;font-size:16px;}
 .suggestions{background:white;color:black;border-radius:8px;margin-bottom:8px;max-height:160px;overflow-y:auto;}
 .suggestions div{padding:10px;border-bottom:1px solid #ddd;}
 .suggestions div:hover{background:#eee;cursor:pointer;}
@@ -62,6 +62,15 @@ canvas{background:white;border-radius:10px;margin-top:10px;width:100%;max-height
 </div>
 
 <div class="box">
+  <select id="poiType">
+    <option value="hotel">🏨 Ubytovanie</option>
+    <option value="restaurant">🍴 Občerstvenie</option>
+    <option value="fuel">⛽ Čerpacia stanica</option>
+  </select>
+  <button class="btn" onclick="showPOI()">🔍 Zobraziť POI na trase</button>
+</div>
+
+<div class="box">
   <button class="btn" onclick="showPinModal()">⚙️ Nastavenie sadzieb</button>
 </div>
 
@@ -89,6 +98,7 @@ let carLat, carLon, pickupLat, pickupLon, dropLat, dropLon;
 let distToClient=0, distWithClient=0;
 let currentRide=null;
 let waitStart=null;
+let poiMarkers=[];
 
 map=L.map('map').setView([48.15,17.11],13);
 L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png').addTo(map);
@@ -162,7 +172,7 @@ async function calculate(){
     distToClient=km(carLat,carLon,pickupLat,pickupLon)||0;
     distWithClient=km(pickupLat,pickupLon,dropLat,dropLon)||0;
     updateResults();
-  }catch(e){console.error(e); alert("Chyba výpočtu. Skontroluj adresy alebo GPS polohu.");}
+  }catch(e){ console.error(e); alert("Chyba výpočtu. Skontroluj adresy alebo GPS polohu.");}
 }
 
 function calcWaitCost(){
@@ -258,6 +268,42 @@ function checkPin(){
   const val=document.getElementById("pinInput").value;
   if(val===SADZBY_PIN){ alert("PIN správny – tu sa dajú meniť sadzby"); document.getElementById("pinModal").style.display="none"; document.getElementById("pinInput").value=""; }
   else alert("PIN nesprávny");
+}
+
+// --- POI ---
+async function showPOI(){
+  if(!pickupLat || !dropLat) return alert("Zadaj nástup a cieľ klienta");
+  const type = document.getElementById("poiType").value;
+  const query = `
+    [out:json];
+    (
+      node[amenity=${type}](${Math.min(pickupLat,dropLat)},${Math.min(pickupLon,dropLon)},${Math.max(pickupLat,dropLat)},${Math.max(pickupLon,dropLon)});
+      way[amenity=${type}](${Math.min(pickupLat,dropLat)},${Math.min(pickupLon,dropLon)},${Math.max(pickupLat,dropLat)},${Math.max(pickupLon,dropLon)});
+      relation[amenity=${type}](${Math.min(pickupLat,dropLat)},${Math.min(pickupLon,dropLon)},${Math.max(pickupLat,dropLat)},${Math.max(pickupLon,dropLon)});
+    );
+    out center 20;
+  `;
+  try{
+    const res = await fetch('https://overpass-api.de/api/interpreter', {method:'POST', body:query});
+    const data = await res.json();
+    poiMarkers.forEach(m=>map.removeLayer(m));
+    poiMarkers = [];
+    data.elements.forEach(el=>{
+      let lat=el.lat||el.center?.lat;
+      let lon=el.lon||el.center?.lon;
+      if(!lat||!lon) return;
+      const m = L.marker([lat,lon],{icon:L.icon({iconUrl: type==='hotel'?'https://img.icons8.com/ios-filled/50/000000/hotel.png': type==='restaurant'?'https://img.icons8.com/ios-filled/50/000000/restaurant.png':'https://img.icons8.com/ios-filled/50/000000/fuel.png',iconSize:[32,32]})})
+                  .addTo(map).bindPopup(`${type.toUpperCase()}<br><button onclick="addToRoute(${lat},${lon})">➡️ Pridať do trasy</button>`);
+      poiMarkers.push(m);
+    });
+    alert(`Zobrazených ${poiMarkers.length} POI bodov typu ${type}`);
+  }catch(e){ console.error(e); alert("Chyba pri načítaní POI"); }
+}
+
+function addToRoute(lat,lon){
+  if(!pickupLat || !dropLat) return alert("Zadaj trasu");
+  const url=`https://www.google.com/maps/dir/?api=1&origin=${pickupLat},${pickupLon}&destination=${dropLat},${dropLon}&waypoints=${lat},${lon}`;
+  window.open(url);
 }
 </script>
 </body>
